@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pronóstico dos cifras Premium</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.10.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+</head>
+<body>
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p class="mt-4 text-indigo-700 font-semibold">Procesando datos...</p>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-indigo-800 mb-4">PRONÓSTICO dos cifras PREMIUM</h1>
+            <p class="text-lg text-gray-600">Aplicación avanzada para pronósticos astrológicos con múltiples modelos predictivos</p>
+        </header>
+
+        <!-- File Upload Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-indigo-700 mb-4">Carga de Archivos</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Archivo 1 (ProHOY-ASTROLUNA.csv):</label>
+                    <div class="flex items-center">
+                        <input type="file" id="file1" class="hidden" accept=".csv,.xlsx,.xls">
+                        <label for="file1" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded cursor-pointer">Seleccionar archivo</label>
+                        <span id="file1Name" class="ml-3 text-sm text-gray-500">No se ha seleccionado ningún archivo</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Archivo 2 (ProInvHOY-ASTROLUNA.csv):</label>
+                    <div class="flex items-center">
+                        <input type="file" id="file2" class="hidden" accept=".csv,.xlsx,.xls">
+                        <label for="file2" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded cursor-pointer">Seleccionar archivo</label>
+                        <span id="file2Name" class="ml-3 text-sm text-gray-500">No se ha seleccionado ningún archivo</span>
+                    </div>
+                </div>
+            </div>
+            <button id="loadData" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-medium">
+                Cargar y Procesar Datos
+            </button>
+        </div>
+
+        <!-- Control Panel Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-indigo-700 mb-4">Panel de Control</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="varSelection">Variable de predicción:</label>
+                    <select id="varSelection" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="DC" selected>DC - Dígito Clave (10-99)</option>
+                        <option value="EXT">EXT - Extensión (10-99)</option>
+                        <option value="ULT2">ULT2 - Último Dos (10-99)</option>
+                        <option value="PM2">PM2 - Prima Dos (10-99)</option>
+                        <option value="C1C3">C1C3 - Combinación 1-3 (10-99)</option>
+                        <option value="C2C4">C2C4 - Combinación 2-4 (10-99)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="iterations">Iteraciones:</label>
+                    <input type="number" id="iterations" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="300" min="50" max="5000">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="numIndices">Índices a generar:</label>
+                    <input type="number" id="numIndices" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="7" min="1" max="30">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="numThreads">CPUs a utilizar:</label>
+                    <input type="number" id="numThreads" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="4" min="1" max="16">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="maxDepth">Profundidad de árboles:</label>
+                    <input type="number" id="maxDepth" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="4" min="2" max="10">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="learningRate">Tasa de aprendizaje:</label>
+                    <input type="number" id="learningRate" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="0.7" min="0.01" max="1" step="0.01">
+                </div>
+            </div>
+            <div class="mt-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2" for="forecastDays">Días de pronóstico:</label>
+                <div class="slider-container">
+                    <input type="range" id="forecastDays" class="w-full" min="1" max="30" value="7">
+                    <span id="forecastDaysValue" class="text-indigo-700 font-semibold">7 días</span>
+                </div>
+            </div>
+            <button id="runModels" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded font-medium">
+                Ejecutar Pronósticos
+            </button>
+        </div>
+
+        <!-- Models Section -->
+        <div class="mb-8">
+            <div class="flex flex-wrap mb-4 border-b">
+                <button id="tab-xgboost" class="tab-button px-4 py-2 text-indigo-600 font-medium border-b-2 border-indigo-600">XGBoost</button>
+                <button id="tab-lightgbm" class="tab-button px-4 py-2 text-gray-500 font-medium">LightGBM</button>
+                <button id="tab-neuralnet" class="tab-button px-4 py-2 text-gray-500 font-medium">Redes Neuronales</button>
+                <button id="tab-lstm" class="tab-button px-4 py-2 text-gray-500 font-medium">LSTM</button>
+                <button id="tab-hybrid" class="tab-button px-4 py-2 text-gray-500 font-medium">Híbrido LSTM+NN</button>
+                <button id="tab-hybrid-lgbm-nn" class="tab-button px-3 py-2 text-gray-500 font-medium text-sm">Híbrido LGBM+NN</button>
+                <button id="tab-hybrid-lgbm-lstm" class="tab-button px-3 py-2 text-gray-500 font-medium text-sm">Híbrido LGBM+LSTM</button>
+                <button id="tab-bayesian" class="tab-button px-4 py-2 text-gray-500 font-medium">Bayesiano</button>
+                <button id="tab-consensus" class="tab-button px-4 py-2 text-gray-500 font-medium">Consenso</button>
+            </div>
+
+            <!-- XGBoost Tab Content -->
+            <div id="content-xgboost" class="tab-content active">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico XGBoost</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="xgboostResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="xgboostErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="xgboost-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="xgboost-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="xgboost-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización de Resultados</h4>
+                            <div class="chart-container">
+                                <canvas id="xgboostChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="xgboost-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LightGBM Tab Content -->
+            <div id="content-lightgbm" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico LightGBM</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="lightgbmResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="lightgbmErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="lightgbm-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="lightgbm-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="lightgbm-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización de Resultados</h4>
+                            <div class="chart-container">
+                                <canvas id="lightgbmChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="lightgbm-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Neural Network Tab Content -->
+            <div id="content-neuralnet" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico Redes Neuronales</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="neuralnetResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="neuralnetErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="neuralnet-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="neuralnet-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="neuralnet-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Arquitectura de Red</h4>
+                                <div id="neuralnet-architecture" class="p-4 bg-gray-100 rounded">
+                                    <p>Capas: Input [n] → Dense [64] → Dense [32] → Dense [16] → Output [1]</p>
+                                    <p>Activación: ReLU en capas ocultas, Lineal en salida</p>
+                                    <p>Optimizador: Adam</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización de Resultados</h4>
+                            <div class="chart-container">
+                                <canvas id="neuralnetChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="neuralnet-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LSTM Model Tab Content -->
+            <div id="content-lstm" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico LSTM (Long Short-Term Memory)</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="lstmResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="lstmErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="lstm-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="lstm-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="lstm-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Arquitectura LSTM</h4>
+                                <div id="lstm-architecture" class="p-4 bg-gray-100 rounded">
+                                    <p>Capas: LSTM [50] → LSTM [30] → Dense [25] → Dense [10] → Output [1]</p>
+                                    <p>Secuencia: 10 pasos temporales</p>
+                                    <p>Dropout: 20% (recurrente y regular)</p>
+                                    <p>Optimizador: Adam (lr=0.001)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización Temporal</h4>
+                            <div class="chart-container">
+                                <canvas id="lstmChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico LSTM)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="lstm-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hybrid Model Tab Content -->
+            <div id="content-hybrid" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico Modelo Híbrido (LSTM + Redes Neuronales)</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="hybridResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="hybridErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="hybrid-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="hybrid-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="hybrid-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Funcionamiento del Modelo Híbrido</h4>
+                                <div class="p-4 bg-gray-100 rounded">
+                                    <p>Este modelo combina las predicciones de LSTM (memoria a largo plazo) con Redes Neuronales tradicionales, aprovechando tanto patrones temporales como relaciones no lineales.</p>
+                                    <p class="mt-2">Ponderación dinámica basada en confianza de cada modelo</p>
+                                    <p class="mt-2">Incorpora análisis de tendencia, estacionalidad y varianza avanzada</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización de Resultados</h4>
+                            <div class="chart-container">
+                                <canvas id="hybridChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="hybrid-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hybrid LGBM+NN Model Tab Content -->
+            <div id="content-hybrid-lgbm-nn" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico Modelo Híbrido (LightGBM + Redes Neuronales)</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="hybridLGBMNNResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="hybridLGBMNNErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="hybrid-lgbm-nn-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="hybrid-lgbm-nn-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="hybrid-lgbm-nn-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Funcionamiento del Modelo Híbrido LGBM+NN</h4>
+                                <div class="p-4 bg-gray-100 rounded">
+                                    <p>Este modelo combina LightGBM (gradient boosting) con Redes Neuronales, optimizando la ponderación según la complejidad de los datos.</p>
+                                    <p class="mt-2">Ponderación dinámica: 40-65% LGBM, 35-60% NN según complejidad</p>
+                                    <p class="mt-2">Incorpora análisis de interacción entre modelos y factores estacionales</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización de Resultados</h4>
+                            <div class="chart-container">
+                                <canvas id="hybridLGBMNNChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="hybrid-lgbm-nn-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hybrid LGBM+LSTM Model Tab Content -->
+            <div id="content-hybrid-lgbm-lstm" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico Modelo Híbrido (LightGBM + LSTM)</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="hybridLGBMLSTMResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Predicción</th>
+                                            <th>Valor Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4 class="text-lg font-semibold mb-3">Métricas de Error</h4>
+                            <div class="table-container">
+                                <table id="hybridLGBMLSTMErrors" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>MSE (Error Cuadrático Medio)</td>
+                                            <td id="hybrid-lgbm-lstm-mse">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>MAE (Error Absoluto Medio)</td>
+                                            <td id="hybrid-lgbm-lstm-mae">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>RMSE (Raíz del Error Cuadrático Medio)</td>
+                                            <td id="hybrid-lgbm-lstm-rmse">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Funcionamiento del Modelo Híbrido LGBM+LSTM</h4>
+                                <div class="p-4 bg-gray-100 rounded">
+                                    <p>Este modelo combina LightGBM con LSTM, optimizando para patrones temporales estructurados y memoria a largo plazo.</p>
+                                    <p class="mt-2">Ponderación adaptativa: 60-80% LSTM, 20-40% LGBM según estabilidad temporal</p>
+                                    <p class="mt-2">Incorpora sinergia temporal-estructural y momentum dinámico</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización Temporal</h4>
+                            <div class="chart-container">
+                                <canvas id="hybridLGBMLSTMChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="hybrid-lgbm-lstm-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bayesian Dynamic Networks Tab Content -->
+            <div id="content-bayesian" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Redes Bayesianas Dinámicas</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="bayesianResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Índice</th>
+                                            <th>Valor</th>
+                                            <th>Probabilidad</th>
+                                            <th>Confianza</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bayesianResultsBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center text-gray-500 py-8">
+                                                <i class="fas fa-brain text-2xl mb-2 block"></i>
+                                                <p>Ejecute los modelos para ver las predicciones bayesianas</p>
+                                                <p class="text-sm mt-1">El modelo utilizará redes bayesianas dinámicas para generar pronósticos probabilísticos</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <h5 class="font-semibold text-blue-800 mb-2">Métricas del Modelo</h5>
+                                <div id="bayesianMetrics" class="text-sm text-blue-700">
+                                    <div class="text-center text-gray-500 py-4">
+                                        <i class="fas fa-chart-line mb-2 block"></i>
+                                        <p class="text-sm">Las métricas aparecerán aquí después de ejecutar el modelo</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Visualización</h4>
+                            <div class="chart-container">
+                                <canvas id="bayesianChart" style="max-height: 400px;"></canvas>
+                                <div id="bayesianChartPlaceholder" class="text-center text-gray-500 py-8">
+                                    <i class="fas fa-chart-line text-2xl mb-2 block"></i>
+                                    <p>El gráfico de predicciones aparecerá aquí</p>
+                                    <p class="text-sm mt-1">Mostrará valores reales vs predicciones con intervalos de confianza</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 bg-purple-50 p-4 rounded-lg">
+                                <h5 class="font-semibold text-purple-800 mb-2">Distribución de Probabilidades</h5>
+                                <div id="bayesianDistribution" class="text-sm text-purple-700">
+                                    <div class="text-center text-gray-500 py-4">
+                                        <i class="fas fa-chart-pie mb-2 block"></i>
+                                        <p class="text-sm">La distribución de probabilidades aparecerá aquí</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico)</h4>
+                        
+                        <!-- Botón de prueba para el modelo bayesiano -->
+                        <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm text-yellow-800 mb-1">
+                                        <i class="fas fa-flask mr-1"></i>
+                                        <strong>Modo de Prueba:</strong> Puede probar el modelo bayesiano independientemente
+                                    </p>
+                                    <p class="text-xs text-yellow-600">Útil para verificar que el modelo funciona correctamente</p>
+                                </div>
+                                <button id="test-bayesian-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm whitespace-nowrap">
+                                    🧪 Probar Modelo
+                                </button>
+                            </div>
+                            <div id="bayesian-test-status" class="mt-2 text-sm hidden">
+                                <!-- Status messages will appear here -->
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="bayesian-forecast">
+                            <div class="col-span-full text-center text-gray-500 py-8">
+                                <i class="fas fa-crystal-ball text-3xl mb-3 block"></i>
+                                <p class="font-medium">Pronósticos Bayesianos</p>
+                                <p class="text-sm mt-1">Los pronósticos para los próximos 7 días aparecerán aquí</p>
+                                <p class="text-xs mt-2 text-gray-400">Incluirán intervalos de confianza y probabilidades</p>
+                            </div>
+                        </div>
+                            <div class="col-span-full text-center text-gray-500 py-8">
+                                <i class="fas fa-crystal-ball text-3xl mb-3 block"></i>
+                                <p class="font-medium">Pronósticos Bayesianos</p>
+                                <p class="text-sm mt-1">Los pronósticos para los próximos 7 días aparecerán aquí</p>
+                                <p class="text-xs mt-2 text-gray-400">Incluirán intervalos de confianza y probabilidades</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Consensus Model Tab Content -->
+            <div id="content-consensus" class="tab-content">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-2xl font-semibold text-indigo-700 mb-4">Pronóstico Consensuado (Todos los Modelos)</h3>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Resultados Numéricos</h4>
+                            <div class="table-container mb-6">
+                                <table id="consensusResults" class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>XGBoost</th>
+                                            <th>LightGBM</th>
+                                            <th>Red Neuronal</th>
+                                            <th>LSTM</th>
+                                            <th>Híbrido LSTM+NN</th>
+                                            <th>Híbrido LGBM+NN</th>
+                                            <th>Híbrido LGBM+LSTM</th>
+                                            <th>Consenso</th>
+                                            <th>Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="10" class="text-center py-4 text-gray-500">Cargue los datos y ejecute el modelo para ver resultados</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="bg-blue-50 border border-blue-200 rounded p-4 mt-4">
+                                <h4 class="text-lg font-semibold text-blue-800 mb-2">Ponderación del consenso</h4>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">XGBoost:</label>
+                                        <input type="range" id="xgboost-weight" min="0" max="100" value="12" class="w-full">
+                                        <span id="xgboost-weight-value" class="text-sm text-gray-600">12%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">LightGBM:</label>
+                                        <input type="range" id="lightgbm-weight" min="0" max="100" value="13" class="w-full">
+                                        <span id="lightgbm-weight-value" class="text-sm text-gray-600">13%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Redes Neuronales:</label>
+                                        <input type="range" id="neuralnet-weight" min="0" max="100" value="13" class="w-full">
+                                        <span id="neuralnet-weight-value" class="text-sm text-gray-600">13%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">LSTM:</label>
+                                        <input type="range" id="lstm-weight" min="0" max="100" value="13" class="w-full">
+                                        <span id="lstm-weight-value" class="text-sm text-gray-600">13%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Híbrido LSTM+NN:</label>
+                                        <input type="range" id="hybrid-weight" min="0" max="100" value="15" class="w-full">
+                                        <span id="hybrid-weight-value" class="text-sm text-gray-600">15%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Híbrido LGBM+NN:</label>
+                                        <input type="range" id="hybrid-lgbm-nn-weight" min="0" max="100" value="13" class="w-full">
+                                        <span id="hybrid-lgbm-nn-weight-value" class="text-sm text-gray-600">13%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Híbrido LGBM+LSTM:</label>
+                                        <input type="range" id="hybrid-lgbm-lstm-weight" min="0" max="100" value="13" class="w-full">
+                                        <span id="hybrid-lgbm-lstm-weight-value" class="text-sm text-gray-600">13%</span>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Bayesiano:</label>
+                                        <input type="range" id="bayesian-weight" min="0" max="100" value="12" class="w-full">
+                                        <span id="bayesian-weight-value" class="text-sm text-gray-600">12%</span>
+                                    </div>
+                                </div>
+                                <button id="apply-weights" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Aplicar ponderaciones</button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Comparación Visual</h4>
+                            <div class="chart-container">
+                                <canvas id="consensusChart"></canvas>
+                            </div>
+                            <div class="mt-6">
+                                <h4 class="text-lg font-semibold mb-3">Próximos 7 días (Pronóstico Consensuado)</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="consensus-forecast">
+                                    <!-- Forecast cards will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-indigo-700 mb-4">Información Adicional</h2>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">Signos Numéricos</h3>
+                    <div class="table-container">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>Signo</th>
+                                    <th>Número</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Acuario</td><td>1</td></tr>
+                                <tr><td>Aries</td><td>2</td></tr>
+                                <tr><td>Cancer</td><td>3</td></tr>
+                                <tr><td>Capricornio</td><td>4</td></tr>
+                                <tr><td>Escorpion</td><td>5</td></tr>
+                                <tr><td>Geminis</td><td>6</td></tr>
+                                <tr><td>Leo</td><td>7</td></tr>
+                                <tr><td>Libra</td><td>8</td></tr>
+                                <tr><td>Piscis</td><td>9</td></tr>
+                                <tr><td>Sagitario</td><td>10</td></tr>
+                                <tr><td>Tauro</td><td>11</td></tr>
+                                <tr><td>Virgo</td><td>12</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">Acerca de los Modelos</h3>
+                    <div class="accordion">
+                        <div class="mb-3">
+                            <button class="accordion-btn flex justify-between items-center w-full bg-gray-100 p-3 rounded">
+                                <span class="font-medium">XGBoost</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="accordion-content hidden p-3">
+                                <p>XGBoost es un algoritmo de boosting basado en árboles de decisión. Es eficiente y efectivo para problemas de regresión y clasificación. Utiliza una técnica de "boosting" que mejora iterativamente las predicciones combinando múltiples modelos débiles.</p>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <button class="accordion-btn flex justify-between items-center w-full bg-gray-100 p-3 rounded">
+                                <span class="font-medium">LightGBM</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="accordion-content hidden p-3">
+                                <p>LightGBM es un framework de boosting por gradiente que utiliza algoritmos basados en árboles. Es más rápido y eficiente en memoria que XGBoost, especialmente para conjuntos de datos grandes, gracias a su enfoque de crecimiento de árboles por hoja.</p>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <button class="accordion-btn flex justify-between items-center w-full bg-gray-100 p-3 rounded">
+                                <span class="font-medium">Redes Neuronales</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="accordion-content hidden p-3">
+                                <p>Las redes neuronales son modelos inspirados en el cerebro humano. Consisten en capas de neuronas interconectadas que pueden aprender patrones complejos. Son especialmente efectivas para capturar relaciones no lineales en los datos.</p>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <button class="accordion-btn flex justify-between items-center w-full bg-gray-100 p-3 rounded">
+                                <span class="font-medium">Modelo Híbrido</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="accordion-content hidden p-3">
+                                <p>Un modelo híbrido combina las fortalezas de diferentes algoritmos. En este caso, utiliza tanto LightGBM como redes neuronales. LightGBM captura relaciones estructuradas mientras que las redes neuronales capturan patrones más complejos y no lineales.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center py-6 text-gray-600">
+            <p>© 2023 Pronóstico ASTROLUNA Premium | Versión 2.0</p>
+        </footer>
+    </div>
+
+    <!-- External JavaScript files -->
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    <script src="consensus.js"></script>
+    <script src="lstm.js"></script>
+    <script src="hybrid_lgbm_nn.js"></script>
+    <script src="hybrid_lgbm_lstm.js"></script>
+    <script src="bayesian.js"></script>
+    <script src="events.js"></script>
+</body>
+</html>
