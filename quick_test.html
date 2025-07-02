@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Application Test</title>
+</head>
+<body>
+    <h1>Quick Application Test</h1>
+    <button onclick="runQuickTest()">Run Quick Test</button>
+    <div id="result"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    
+    <script>
+        async function runQuickTest() {
+            console.clear();
+            console.log('=== QUICK TEST ===');
+            
+            try {
+                // Simulate the "Ejecutar Modelos" button click process
+                console.log('Loading CSV files...');
+                
+                const file1Response = await fetch('ProHOY-ASTROLUNA.csv');
+                const file2Response = await fetch('ProInvHOY-ASTROLUNA.csv');
+                
+                const file1Text = await file1Response.text();
+                const file2Text = await file2Response.text();
+                
+                const parseResult1 = Papa.parse(file1Text, { 
+                    header: true, 
+                    dynamicTyping: true, 
+                    skipEmptyLines: true
+                });
+                
+                const parseResult2 = Papa.parse(file2Text, { 
+                    header: true, 
+                    dynamicTyping: true, 
+                    skipEmptyLines: true
+                });
+                
+                console.log('CSV files loaded and parsed');
+                console.log('File1 sample:', parseResult1.data.slice(0, 2));
+                console.log('File2 sample:', parseResult2.data.slice(0, 2));
+                
+                // Process data
+                const processedData = processDataMaster(parseResult1.data, parseResult2.data);
+                console.log('Data processed:', processedData.processedData.length, 'entries');
+                
+                // Prepare for models
+                const modelData = prepareDataForModels(processedData, 'DC', 7);
+                console.log('Model data prepared');
+                console.log('Test data length:', modelData.testData.length);
+                console.log('Test data sample:', modelData.testData.slice(0, 2));
+                
+                // Run XGBoost model with debugging
+                console.log('Running XGBoost model...');
+                const xgboostResults = await runXGBoostModel(modelData, 10, 4, 0.7);
+                
+                console.log('XGBoost completed with', xgboostResults.length, 'results');
+                console.log('Sample results:', xgboostResults.slice(0, 3));
+                
+                // Check actual values specifically
+                const actualValues = xgboostResults
+                    .filter(r => r.actual !== null && r.actual !== undefined)
+                    .map(r => r.actual);
+                
+                console.log('Actual values found:', actualValues);
+                console.log('Actual values range:', actualValues.length > 0 ? 
+                    `${Math.min(...actualValues)} - ${Math.max(...actualValues)}` : 'No values');
+                
+                document.getElementById('result').innerHTML = 
+                    '<h3>Test Results:</h3>' +
+                    '<p>Processed data: ' + processedData.processedData.length + ' entries</p>' +
+                    '<p>Test data: ' + modelData.testData.length + ' entries</p>' +
+                    '<p>XGBoost results: ' + xgboostResults.length + ' results</p>' +
+                    '<p>Actual values found: ' + actualValues.length + '</p>' +
+                    '<p>Actual values: ' + actualValues.slice(0, 10).join(', ') + '</p>' +
+                    '<p><strong>Check console for detailed logs</strong></p>';
+                
+            } catch (error) {
+                console.error('Error in quick test:', error);
+                document.getElementById('result').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Logs - Proceso Completo</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+        .controls { margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Logs - Proceso Completo</h1>
+    
+    <div class="controls">
+        <button onclick="runTest()">Ejecutar Test</button>
+        <button onclick="clearLogs()">Limpiar Logs</button>
+        <select id="targetVariable">
+            <option value="DC">DC</option>
+            <option value="EXT">EXT</option>
+            <option value="ULT2">ULT2</option>
+            <option value="PM2">PM2</option>
+            <option value="C1C3">C1C3</option>
+            <option value="C2C4">C2C4</option>
+        </select>
+    </div>
+    
+    <div class="section">
+        <h2>Estado del Test</h2>
+        <div id="status">Listo para ejecutar</div>
+    </div>
+    
+    <div class="section">
+        <h2>Logs del Proceso</h2>
+        <pre id="logs"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Resultado Final</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let allLogs = [];
+        
+        // Override console functions to capture logs
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function captureLog(level, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+            
+            allLogs.push(`[${timestamp}] ${level.toUpperCase()}: ${message}`);
+            
+            // Call original function
+            if (level === 'log') originalLog(...args);
+            else if (level === 'warn') originalWarn(...args);
+            else if (level === 'error') originalError(...args);
+            
+            // Update logs display
+            updateLogsDisplay();
+        }
+        
+        function updateLogsDisplay() {
+            const logsElement = document.getElementById('logs');
+            logsElement.textContent = allLogs.slice(-100).join('\n'); // Show last 100 logs
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+        
+        function clearLogs() {
+            allLogs = [];
+            updateLogsDisplay();
+        }
+        
+        console.log = (...args) => captureLog('log', ...args);
+        console.warn = (...args) => captureLog('warn', ...args);
+        console.error = (...args) => captureLog('error', ...args);
+        
+        async function runTest() {
+            const targetVariable = document.getElementById('targetVariable').value;
+            const statusElement = document.getElementById('status');
+            const resultsElement = document.getElementById('results');
+            
+            try {
+                statusElement.innerHTML = '<span class="warning">Iniciando test...</span>';
+                resultsElement.innerHTML = '';
+                
+                console.log('=== INICIANDO TEST COMPLETO ===');
+                console.log('Variable objetivo:', targetVariable);
+                
+                // Step 1: Load CSV files
+                console.log('=== CARGANDO ARCHIVOS CSV ===');
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const csvText1 = await response1.text();
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                const csvText2 = await response2.text();
+                
+                console.log('CSV files loaded');
+                
+                // Step 2: Parse CSV
+                console.log('=== PARSEANDO CSV ===');
+                const file1Data = parseCSV(csvText1);
+                const file2Data = parseCSV(csvText2);
+                
+                console.log('CSV parsed. File1:', file1Data.length, 'rows. File2:', file2Data.length, 'rows');
+                
+                // Step 3: Process data
+                console.log('=== PROCESANDO DATOS ===');
+                statusElement.innerHTML = '<span class="warning">Procesando datos...</span>';
+                
+                const processedData = processData(file1Data, file2Data);
+                
+                console.log('Data processed. Processed data length:', processedData.processedData.length);
+                
+                // Step 4: Prepare data for models
+                console.log('=== PREPARANDO DATOS PARA MODELOS ===');
+                statusElement.innerHTML = '<span class="warning">Preparando datos para modelos...</span>';
+                
+                const preparedData = prepareDataForModels(processedData, targetVariable, 3);
+                
+                console.log('Data prepared. Train data:', preparedData.trainData.length, 'Test data:', preparedData.testData.length);
+                
+                // Step 5: Run XGBoost model
+                console.log('=== EJECUTANDO MODELO XGBOOST ===');
+                statusElement.innerHTML = '<span class="warning">Ejecutando modelo XGBoost...</span>';
+                
+                const xgboostResult = await runXGBoostModel(
+                    preparedData.trainData,
+                    preparedData.testData,
+                    preparedData.futureDates,
+                    targetVariable
+                );
+                
+                console.log('XGBoost completed. Validation results:', xgboostResult.validation.length);
+                
+                // Step 6: Analyze results
+                console.log('=== ANALIZANDO RESULTADOS ===');
+                
+                const actualValues = xgboostResult.validation.map(v => v.actual);
+                const naCount = actualValues.filter(v => v === null || v === undefined || isNaN(v)).length;
+                const validCount = actualValues.length - naCount;
+                
+                console.log('Análisis de valores actuales:');
+                console.log('Total:', actualValues.length);
+                console.log('Válidos:', validCount);
+                console.log('N/A:', naCount);
+                console.log('Valores:', actualValues.slice(0, 10));
+                
+                // Display results
+                let resultHtml = `<h3>Resultados para ${targetVariable}</h3>`;
+                resultHtml += `<p><strong>Datos de entrenamiento:</strong> ${preparedData.trainData.length}</p>`;
+                resultHtml += `<p><strong>Datos de prueba:</strong> ${preparedData.testData.length}</p>`;
+                resultHtml += `<p><strong>Predicciones:</strong> ${xgboostResult.validation.length}</p>`;
+                resultHtml += `<p><strong>Valores válidos:</strong> ${validCount}</p>`;
+                resultHtml += `<p><strong>Valores N/A:</strong> ${naCount}</p>`;
+                
+                if (naCount > 0) {
+                    resultHtml += `<p><span class="error">❌ PROBLEMA: ${naCount} valores aparecen como N/A</span></p>`;
+                } else {
+                    resultHtml += `<p><span class="success">✅ OK: Todos los valores son válidos</span></p>`;
+                }
+                
+                resultHtml += '<h4>Muestra de resultados:</h4>';
+                resultHtml += '<table border="1" style="border-collapse: collapse;"><tr><th>Fecha</th><th>Actual</th><th>Predicción</th><th>Estado</th></tr>';
+                
+                xgboostResult.validation.slice(0, 10).forEach(result => {
+                    const isValid = result.actual !== null && result.actual !== undefined && !isNaN(result.actual);
+                    resultHtml += `<tr>`;
+                    resultHtml += `<td>${result.date ? result.date.toLocaleDateString() : 'N/A'}</td>`;
+                    resultHtml += `<td>${result.actual}</td>`;
+                    resultHtml += `<td>${result.predicted}</td>`;
+                    resultHtml += `<td>${isValid ? '✅' : '❌'}</td>`;
+                    resultHtml += `</tr>`;
+                });
+                
+                resultHtml += '</table>';
+                
+                resultsElement.innerHTML = resultHtml;
+                statusElement.innerHTML = '<span class="success">Test completado</span>';
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                statusElement.innerHTML = `<span class="error">Test falló: ${error.message}</span>`;
+                resultsElement.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        const value = values[index];
+                        if (header === 'Fecha' || header === 'fecha' || header === 'Date') {
+                            row[header] = value;
+                        } else {
+                            const numValue = parseFloat(value);
+                            row[header] = isNaN(numValue) ? value : numValue;
+                        }
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        // Initialize the page
+        window.addEventListener('load', () => {
+            console.log('Page loaded, ready for testing');
+        });
+    </script>
+</body>
+</html>

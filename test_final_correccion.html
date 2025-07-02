@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Final - Corrección de Valores Actuales</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .warning { background: #fff3cd; color: #856404; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .highlight { background: #ffeb3b; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Test Final - Corrección de Valores Actuales</h1>
+    <p><strong>Objetivo:</strong> Verificar que los valores actuales muestren números de dos cifras (40-99) en lugar de una cifra (0-9)</p>
+    
+    <button onclick="runCompleteTest()">🚀 Ejecutar Test Completo</button>
+    <button onclick="clearResults()">🗑️ Limpiar Resultados</button>
+    
+    <div id="results"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    
+    <script>
+        function addResult(content, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `section ${type}`;
+            div.innerHTML = content;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            console.clear();
+        }
+        
+        async function runCompleteTest() {
+            clearResults();
+            addResult('<h2>🔍 Iniciando Test Completo de Corrección</h2>', 'info');
+            
+            let testsPassed = 0;
+            let totalTests = 0;
+            
+            try {
+                // Test 1: Cargar y verificar archivos CSV
+                addResult('<h3>Test 1: Verificación de Archivos CSV</h3>', 'info');
+                totalTests++;
+                
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                
+                if (response1.ok && response2.ok) {
+                    const text1 = await response1.text();
+                    const text2 = await response2.text();
+                    
+                    const parsed1 = Papa.parse(text1, { header: true, dynamicTyping: true, skipEmptyLines: true });
+                    const parsed2 = Papa.parse(text2, { header: true, dynamicTyping: true, skipEmptyLines: true });
+                    
+                    // Verificar valores DC en los CSV
+                    const csvValues1 = parsed1.data.map(row => row.DC).filter(v => v != null);
+                    const csvValues2 = parsed2.data.map(row => row.DC).filter(v => v != null);
+                    
+                    const allCsvValues = [...csvValues1, ...csvValues2];
+                    const correctRange = allCsvValues.filter(v => v >= 40 && v <= 99);
+                    
+                    if (correctRange.length > 0) {
+                        testsPassed++;
+                        addResult(`✅ CSV files contain correct two-digit values<br>
+                            File 1 DC values: ${csvValues1.slice(0, 5).join(', ')}<br>
+                            File 2 DC values: ${csvValues2.slice(0, 5).join(', ')}<br>
+                            Values in correct range (40-99): ${correctRange.length}/${allCsvValues.length}`, 'success');
+                    } else {
+                        addResult(`❌ CSV files do not contain values in correct range (40-99)`, 'error');
+                    }
+                } else {
+                    addResult(`❌ Error loading CSV files`, 'error');
+                }
+                
+                // Test 2: Procesar datos con función maestra
+                addResult('<h3>Test 2: Procesamiento de Datos</h3>', 'info');
+                totalTests++;
+                
+                const file1Data = Papa.parse(await (await fetch('ProHOY-ASTROLUNA.csv')).text(), { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+                const file2Data = Papa.parse(await (await fetch('ProInvHOY-ASTROLUNA.csv')).text(), { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+                
+                const processedData = processDataMaster(file1Data, file2Data);
+                
+                if (processedData && processedData.processedData && processedData.processedData.length > 0) {
+                    const dcValues = processedData.processedData.map(item => item.DC).filter(v => v != null);
+                    const correctProcessed = dcValues.filter(v => v >= 40 && v <= 99);
+                    
+                    if (correctProcessed.length > 0) {
+                        testsPassed++;
+                        addResult(`✅ Data processed successfully<br>
+                            Processed entries: ${processedData.processedData.length}<br>
+                            DC values: ${dcValues.slice(0, 10).join(', ')}<br>
+                            Values in correct range: ${correctProcessed.length}/${dcValues.length}`, 'success');
+                    } else {
+                        addResult(`⚠️ Processed data exists but DC values not in correct range<br>
+                            DC values found: ${dcValues.slice(0, 10).join(', ')}`, 'warning');
+                    }
+                } else {
+                    addResult(`❌ Data processing failed`, 'error');
+                }
+                
+                // Test 3: Preparar datos para modelos
+                addResult('<h3>Test 3: Preparación de Datos para Modelos</h3>', 'info');
+                totalTests++;
+                
+                const modelData = prepareDataForModels(processedData, 'DC', 7);
+                
+                if (modelData && modelData.testData && modelData.testData.length > 0) {
+                    const testDcValues = modelData.testData.map(item => item.DC).filter(v => v != null);
+                    const correctTest = testDcValues.filter(v => v >= 40 && v <= 99);
+                    
+                    if (correctTest.length > 0) {
+                        testsPassed++;
+                        addResult(`✅ Model data prepared successfully<br>
+                            Test data entries: ${modelData.testData.length}<br>
+                            Test DC values: ${testDcValues.join(', ')}<br>
+                            Values in correct range: ${correctTest.length}/${testDcValues.length}`, 'success');
+                    } else {
+                        addResult(`⚠️ Model data prepared but test DC values not in correct range<br>
+                            Test DC values: ${testDcValues.join(', ')}`, 'warning');
+                    }
+                } else {
+                    addResult(`❌ Model data preparation failed`, 'error');
+                }
+                
+                // Test 4: Ejecutar modelo XGBoost
+                addResult('<h3>Test 4: Ejecución de Modelo XGBoost</h3>', 'info');
+                totalTests++;
+                
+                const xgboostResults = await runXGBoostModel(modelData, 10, 4, 0.7);
+                
+                if (xgboostResults && xgboostResults.length > 0) {
+                    const actualValues = xgboostResults.map(r => r.actual).filter(v => v != null && v !== undefined);
+                    const correctActual = actualValues.filter(v => v >= 40 && v <= 99);
+                    
+                    if (correctActual.length > 0) {
+                        testsPassed++;
+                        addResult(`✅ XGBoost model executed successfully<br>
+                            Results: ${xgboostResults.length}<br>
+                            Actual values: ${actualValues.slice(0, 10).join(', ')}<br>
+                            Values in correct range: ${correctActual.length}/${actualValues.length}<br>
+                            <strong>✅ ACTUAL VALUES ARE NOW CORRECT!</strong>`, 'success');
+                    } else {
+                        addResult(`❌ XGBoost executed but actual values still incorrect<br>
+                            Actual values: ${actualValues.slice(0, 10).join(', ')}<br>
+                            <strong>❌ PROBLEM STILL EXISTS</strong>`, 'error');
+                    }
+                    
+                    // Create sample table to show results
+                    let tableHtml = '<table><tr><th>Fecha</th><th>Predicción</th><th>Valor Actual</th><th>Estado</th></tr>';
+                    xgboostResults.slice(0, 5).forEach(result => {
+                        const status = (result.actual >= 40 && result.actual <= 99) ? '✅ Correcto' : '❌ Incorrecto';
+                        const rowClass = (result.actual >= 40 && result.actual <= 99) ? '' : 'highlight';
+                        tableHtml += `<tr class="${rowClass}">
+                            <td>${result.date ? result.date.toLocaleDateString() : 'N/A'}</td>
+                            <td>${result.predicted ? result.predicted.toFixed(2) : 'N/A'}</td>
+                            <td><strong>${result.actual}</strong></td>
+                            <td>${status}</td>
+                        </tr>`;
+                    });
+                    tableHtml += '</table>';
+                    addResult(`<h4>Muestra de Resultados XGBoost:</h4>${tableHtml}`, 'info');
+                } else {
+                    addResult(`❌ XGBoost model execution failed`, 'error');
+                }
+                
+                // Test 5: Ejecutar otros modelos
+                addResult('<h3>Test 5: Verificación de Otros Modelos</h3>', 'info');
+                totalTests++;
+                
+                try {
+                    const lightgbmResults = await runLightGBMModel(modelData, 10, 4, 0.7);
+                    const neuralNetResults = await runNeuralNetModel(modelData, 10);
+                    
+                    let otherModelsCorrect = true;
+                    let otherModelsInfo = '';
+                    
+                    if (lightgbmResults && lightgbmResults.length > 0) {
+                        const lgbActual = lightgbmResults.map(r => r.actual).filter(v => v != null);
+                        const lgbCorrect = lgbActual.filter(v => v >= 40 && v <= 99);
+                        otherModelsInfo += `LightGBM: ${lgbCorrect.length}/${lgbActual.length} correctos<br>`;
+                        if (lgbCorrect.length === 0) otherModelsCorrect = false;
+                    }
+                    
+                    if (neuralNetResults && neuralNetResults.length > 0) {
+                        const nnActual = neuralNetResults.map(r => r.actual).filter(v => v != null);
+                        const nnCorrect = nnActual.filter(v => v >= 40 && v <= 99);
+                        otherModelsInfo += `NeuralNet: ${nnCorrect.length}/${nnActual.length} correctos<br>`;
+                        if (nnCorrect.length === 0) otherModelsCorrect = false;
+                    }
+                    
+                    if (otherModelsCorrect) {
+                        testsPassed++;
+                        addResult(`✅ Other models also have correct actual values<br>${otherModelsInfo}`, 'success');
+                    } else {
+                        addResult(`⚠️ Some other models still have issues<br>${otherModelsInfo}`, 'warning');
+                    }
+                } catch (error) {
+                    addResult(`⚠️ Error testing other models: ${error.message}`, 'warning');
+                }
+                
+                // Resumen final
+                addResult(`<h2>📊 Resumen Final</h2>
+                    <p><strong>Tests pasados:</strong> ${testsPassed}/${totalTests}</p>
+                    <p><strong>Porcentaje de éxito:</strong> ${Math.round((testsPassed/totalTests)*100)}%</p>
+                    ${testsPassed === totalTests ? 
+                        '<p style="color: green; font-size: 18px;"><strong>🎉 ¡TODOS LOS TESTS PASARON! EL PROBLEMA ESTÁ RESUELTO 🎉</strong></p>' : 
+                        '<p style="color: red; font-size: 18px;"><strong>⚠️ Algunos tests fallaron. Revisar logs de consola.</strong></p>'
+                    }`, testsPassed === totalTests ? 'success' : 'warning');
+                
+            } catch (error) {
+                addResult(`❌ Error during testing: ${error.message}`, 'error');
+                console.error('Test error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

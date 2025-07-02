@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Directo - Acceso a Propiedades</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Test Directo - Acceso a Propiedades</h1>
+    
+    <div id="results"></div>
+
+    <script>
+        async function runDirectTest() {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>Resultados del Test Directo</h2>';
+            
+            try {
+                // Simular datos como los que podrían venir del procesamiento
+                const testItems = [
+                    {
+                        date: new Date('2023-04-01'),
+                        DC: 45,
+                        EXT: 55,
+                        ULT2: 65,
+                        PM2: 75,
+                        C1C3: 85,
+                        C2C4: 95
+                    },
+                    {
+                        date: new Date('2023-04-02'),
+                        DC: 47,
+                        EXT: 57,
+                        ULT2: 67,
+                        PM2: 77,
+                        C1C3: 87,
+                        C2C4: 97
+                    },
+                    {
+                        date: new Date('2023-04-03'),
+                        DC: null, // Test null value
+                        EXT: undefined, // Test undefined
+                        ULT2: '', // Test empty string
+                        PM2: 'invalid', // Test invalid string
+                        C1C3: 83,
+                        C2C4: 93
+                    }
+                ];
+                
+                const targetVariables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                
+                targetVariables.forEach(targetVar => {
+                    html += `<div class="test"><h3>Testing ${targetVar}</h3>`;
+                    
+                    testItems.forEach((item, index) => {
+                        const actualValue = item[targetVar];
+                        const isValid = actualValue !== null && actualValue !== undefined && !isNaN(actualValue);
+                        
+                        html += `<div>`;
+                        html += `Item ${index}: `;
+                        html += `value=${actualValue}, `;
+                        html += `type=${typeof actualValue}, `;
+                        html += `valid=${isValid ? '✅' : '❌'}`;
+                        
+                        if (!isValid) {
+                            html += ` (null: ${actualValue === null}, undefined: ${actualValue === undefined}, NaN: ${isNaN(actualValue)})`;
+                        }
+                        
+                        html += `</div>`;
+                    });
+                    
+                    html += '</div>';
+                });
+                
+                // Test direct CSV loading and parsing
+                html += '<div class="test"><h3>Test CSV Loading</h3>';
+                
+                try {
+                    const response = await fetch('ProHOY-ASTROLUNA.csv');
+                    const csvText = await response.text();
+                    const lines = csvText.trim().split('\n');
+                    
+                    if (lines.length >= 2) {
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        const firstDataLine = lines[1].split(',').map(v => v.trim());
+                        
+                        html += `<div>Headers: ${headers.join(', ')}</div>`;
+                        html += `<div>First data line: ${firstDataLine.join(', ')}</div>`;
+                        
+                        // Parse first row
+                        const row = {};
+                        headers.forEach((header, index) => {
+                            const value = firstDataLine[index];
+                            if (header === 'Fecha') {
+                                row[header] = value;
+                            } else {
+                                const numValue = parseFloat(value);
+                                row[header] = isNaN(numValue) ? value : numValue;
+                            }
+                        });
+                        
+                        html += '<div>Parsed row:</div>';
+                        html += `<pre>${JSON.stringify(row, null, 2)}</pre>`;
+                        
+                        // Test access to each target variable
+                        targetVariables.forEach(targetVar => {
+                            const value = row[targetVar];
+                            const isValid = value !== null && value !== undefined && !isNaN(value);
+                            html += `<div>${targetVar}: ${value} (${typeof value}) - ${isValid ? '✅' : '❌'}</div>`;
+                        });
+                        
+                    }
+                    
+                } catch (csvError) {
+                    html += `<div class="error">Error loading CSV: ${csvError.message}</div>`;
+                }
+                
+                html += '</div>';
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Test failed: ${error.message}</div>`;
+            }
+        }
+        
+        // Run test on load
+        window.addEventListener('load', runDirectTest);
+    </script>
+</body>
+</html>

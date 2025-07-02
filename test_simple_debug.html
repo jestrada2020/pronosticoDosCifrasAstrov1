@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple - Debugging N/A</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Simple - Debugging N/A</h1>
+    
+    <div id="results"></div>
+    <pre id="logs"></pre>
+
+    <script>
+        // Simple CSV parser
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        const value = values[index];
+                        if (header === 'Fecha' || header === 'fecha' || header === 'Date') {
+                            row[header] = value;
+                        } else {
+                            const numValue = parseFloat(value);
+                            row[header] = isNaN(numValue) ? value : numValue;
+                        }
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        // Simple test function
+        async function runSimpleTest() {
+            const resultsDiv = document.getElementById('results');
+            const logsDiv = document.getElementById('logs');
+            let logs = [];
+            
+            function log(message) {
+                console.log(message);
+                logs.push(message);
+                logsDiv.textContent = logs.join('\n');
+            }
+            
+            try {
+                log('=== INICIANDO TEST SIMPLE ===');
+                
+                // Load CSV
+                const response = await fetch('ProHOY-ASTROLUNA.csv');
+                const csvText = await response.text();
+                const csvData = parseCSV(csvText);
+                
+                log(`CSV cargado: ${csvData.length} filas`);
+                log(`Headers: ${Object.keys(csvData[0] || {}).join(', ')}`);
+                
+                // Test specific values
+                const testVariables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                let html = '<h2>Resultados del Test</h2>';
+                
+                testVariables.forEach(varName => {
+                    const values = csvData.map(row => row[varName]).filter(v => v !== undefined && v !== null);
+                    const validValues = values.filter(v => !isNaN(v) && v !== '');
+                    
+                    html += `<div class="result">`;
+                    html += `<h3>${varName}</h3>`;
+                    html += `<p>Total valores: ${values.length}</p>`;
+                    html += `<p>Valores válidos: ${validValues.length}</p>`;
+                    html += `<p>Primeros 10 valores: ${validValues.slice(0, 10).join(', ')}</p>`;
+                    html += `<p>Últimos 10 valores: ${validValues.slice(-10).join(', ')}</p>`;
+                    html += `<p>Rango: ${Math.min(...validValues)} - ${Math.max(...validValues)}</p>`;
+                    
+                    // Test a simple "model" simulation
+                    const sampleData = csvData.slice(-5); // Last 5 rows
+                    html += `<h4>Simulación de Modelo para ${varName}</h4>`;
+                    sampleData.forEach((item, index) => {
+                        const actualValue = item[varName];
+                        const prediction = Math.round(actualValue + (Math.random() - 0.5) * 10);
+                        
+                        html += `<div>Fila ${index}: CSV=${actualValue}, Predicción=${prediction}, Tipo=${typeof actualValue}</div>`;
+                    });
+                    
+                    html += `</div>`;
+                    
+                    log(`${varName}: ${validValues.length} valores válidos, rango ${Math.min(...validValues)}-${Math.max(...validValues)}`);
+                });
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Run test on load
+        window.addEventListener('load', runSimpleTest);
+    </script>
+</body>
+</html>

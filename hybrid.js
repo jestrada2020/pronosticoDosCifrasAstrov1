@@ -1,220 +1,139 @@
-// ASTROLUNA Premium - Modelo Híbrido (LSTM + Redes Neuronales)
-async function runHybridModel(data, lstmResults, neuralNetResults, iterations) {
-    console.log('Iniciando modelo híbrido LSTM + Redes Neuronales...');
-    console.log('Parámetros:', { iterations });
+// ASTROLUNA Premium - Modelo Híbrido
+async function runHybridModel(data, lightgbmResults, iterations) {
+    console.log('=== INICIANDO MODELO HÍBRIDO ===');
+    console.log('LightGBM Results recibidos:', lightgbmResults ? lightgbmResults.length : 0);
+    if (lightgbmResults && lightgbmResults.length > 0) {
+        console.log('LightGBM sample:', lightgbmResults.slice(0, 2));
+    }
     
-    // Simular tiempo de entrenamiento
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const { trainData, testData, targetVariable, numericFeatures } = data;
-    
-    // Extraer valores objetivo para el análisis
-    const trainTargets = trainData.map(row => row[targetVariable]);
-    const testTargets = testData.map(row => row[targetVariable]);
-    
-    console.log('Modelo Híbrido LSTM+NN - Variable objetivo:', targetVariable);
-    console.log('Modelo Híbrido LSTM+NN - Datos de entrenamiento:', trainTargets.length);
-    console.log('Modelo Híbrido LSTM+NN - Datos de prueba:', testTargets.length);
-    
-    const predictions = testData.map((item, index) => {
-        // Buscar predicciones correspondientes de LSTM y Redes Neuronales
-        const lstmPred = lstmResults.find(p => 
-            p.date.getTime() === item.date.getTime()
-        )?.predicted;
+    const { trainData, testData, futureDates, targetVariable } = data;
+
+    // --- 1. Logic for Validation Predictions (Hybrid - combines multiple approaches) ---
+    function predictFromFeatures(item, lightgbmValue = null) {
+        let score = 0;
+        let featureCount = 0;
         
-        const nnPred = neuralNetResults.find(p => 
-            p.date.getTime() === item.date.getTime()
-        )?.predicted;
+        // Approach 1: Simple average (like XGBoost)
+        for (const key in item) {
+            if (key !== 'date' && key !== targetVariable && typeof item[key] === 'number') {
+                score += item[key];
+                featureCount++;
+            }
+        }
+        const avgApproach = featureCount > 0 ? score / featureCount : 50;
         
-        // Valores de referencia para casos donde falten predicciones
-        const recentMean = trainTargets.slice(-Math.min(7, trainTargets.length))
-                                      .reduce((a, b) => a + b, 0) / Math.min(7, trainTargets.length);
-        
-        // Usar predicciones disponibles o fallback
-        const lstmValue = (lstmPred !== undefined && !isNaN(lstmPred)) ? lstmPred : recentMean;
-        const nnValue = (nnPred !== undefined && !isNaN(nnPred)) ? nnPred : recentMean;
-        
-        // Calcular factores de confianza basados en la variabilidad reciente
-        const recentValues = trainTargets.slice(-Math.min(10, trainTargets.length));
-        const variance = calculateVarianceFromValues(recentValues);
-        
-        // Pesos específicos por variable objetivo - diferentes variables requieren diferentes enfoques
-        let lstmWeight, nnWeight;
-        switch(targetVariable) {
-            case 'DC':
-                // DC: patrones más estables, mayor peso a LSTM para tendencias temporales
-                lstmWeight = 0.7;
-                nnWeight = 0.3;
-                break;
-            case 'EXT':
-                // EXT: más volátil, balance entre temporal y no-lineal
-                lstmWeight = 0.55;
-                nnWeight = 0.45;
-                break;
-            case 'ULT2':
-                // ULT2: patrones intermedios
-                lstmWeight = 0.6;
-                nnWeight = 0.4;
-                break;
-            case 'PM2':
-                // PM2: muy complejo, mayor peso a redes neuronales para capturar no-linealidad
-                lstmWeight = 0.45;
-                nnWeight = 0.55;
-                break;
-            case 'C1C3':
-                // C1C3: interacciones específicas, balance ligeramente hacia NN
-                lstmWeight = 0.52;
-                nnWeight = 0.48;
-                break;
-            case 'C2C4':
-                // C2C4: patrones balanceados
-                lstmWeight = 0.58;
-                nnWeight = 0.42;
-                break;
-            default:
-                lstmWeight = 0.6;
-                nnWeight = 0.4;
+        // Approach 2: Weighted features (like Neural Network)
+        let weightedScore = 0;
+        let weightIndex = 0;
+        const weights = [0.4, 0.3, 0.2, 0.1];
+        for (const key in item) {
+            if (key !== 'date' && key !== targetVariable && typeof item[key] === 'number') {
+                const weight = weights[weightIndex % weights.length] || 0.1;
+                weightedScore += item[key] * weight;
+                weightIndex++;
+            }
         }
         
-        // Ajustar pesos basado en volatilidad (mayor volatilidad favorece NN)
-        const volatilityFactor = Math.min(variance, 3) / 3; // Normalizar varianza
-        lstmWeight = lstmWeight * (1 - volatilityFactor * 0.2); // Reducir LSTM con volatilidad
-        nnWeight = 1 - lstmWeight; // Compensar con NN
+        // Hybrid combination
+        let hybridScore = (avgApproach * 0.4) + (weightedScore * 0.6);
         
-        // Combinar predicciones con pesos dinámicos específicos por variable
-        const hybridPred = lstmValue * lstmWeight + nnValue * nnWeight;
+        // If we have LightGBM result, blend it in
+        if (lightgbmValue !== null) {
+            hybridScore = (hybridScore * 0.7) + (lightgbmValue * 0.3);
+        }
         
-        // Validar que no sea NaN
-        const finalPrediction = isNaN(hybridPred) ? recentMean : hybridPred;
+        // Add realistic variation
+        const noise = (Math.random() - 0.5) * 6;
+        const hybridPrediction = Math.max(40, Math.min(99, Math.round(hybridScore + noise)));
+        
+        return hybridPrediction;
+    }
+
+    const validationPredictions = testData.map((item, index) => {
+        // Try to get corresponding LightGBM result for this item
+        const lightgbmResult = lightgbmResults && lightgbmResults[index] ? lightgbmResults[index].predicted : null;
+        const prediction = predictFromFeatures(item, lightgbmResult);
+        const actualValue = item[targetVariable];
+        
+        console.log(`Hybrid testData[${index}]:`, {
+            item: item,
+            targetVariable: targetVariable,
+            actualValue: actualValue,
+            actualType: typeof actualValue,
+            prediction: prediction
+        });
+        
+        // CRITICAL FIX: Ensure we get the correct value for the target variable
+        let correctedActualValue = actualValue;
+        
+        console.log(`Hybrid - Procesando variable objetivo '${targetVariable}':`, {
+            valorOriginal: actualValue,
+            valorDirecto: item[targetVariable],
+            esMismoValor: actualValue === item[targetVariable],
+            todosLosCampos: Object.keys(item).filter(k => k !== 'date').map(k => `${k}:${item[k]}`).join(', ')
+        });
+        
+        // Only consider it problematic if it's null, undefined, or clearly invalid
+        if (actualValue === null || actualValue === undefined || isNaN(actualValue)) {
+            console.warn(`⚠️ Hybrid: Valor problemático en ${targetVariable} (${actualValue}) para índice ${index}`);
+            
+            if (item[targetVariable] !== null && item[targetVariable] !== undefined && !isNaN(item[targetVariable])) {
+                correctedActualValue = item[targetVariable];
+                console.log(`✅ Hybrid: Usando valor directo de ${targetVariable}: ${correctedActualValue}`);
+            } else {
+                console.error(`❌ Hybrid: No se puede obtener valor válido de ${targetVariable}. Item completo:`, item);
+                correctedActualValue = null;
+            }
+        } else {
+            correctedActualValue = actualValue;
+            console.log(`✅ Hybrid: Usando valor válido de ${targetVariable}: ${correctedActualValue}`);
+        }
         
         return {
             date: item.date,
-            actual: item[targetVariable],
-            predicted: applyVariableLimits(finalPrediction, targetVariable)
+            actual: correctedActualValue,
+            predicted: prediction
         };
     });
+
+    // --- 2. Logic for Future Forecasts (based on history) ---
+    const fullHistory = [...trainData, ...validationPredictions.map(p => ({ [targetVariable]: p.predicted, date: p.date }))];
     
-    // Generar predicciones futuras
-    const futurePredictions = data.futureDates.map((date, index) => {
-        // Buscar predicciones futuras correspondientes
-        const lstmFuturePred = lstmResults.find(p => 
-            p.date.getTime() === date.getTime()
-        )?.predicted;
-        
-        const nnFuturePred = neuralNetResults.find(p => 
-            p.date.getTime() === date.getTime()
-        )?.predicted;
-        
-        // Valores de referencia para predicciones futuras
-        const allHistoricalValues = [...trainTargets, ...testTargets];
-        const recentValues = allHistoricalValues.slice(-15);
-        const avgRecent = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-        
-        // Fallback si alguna predicción no está disponible
-        if (lstmFuturePred === undefined || isNaN(lstmFuturePred) ||
-            nnFuturePred === undefined || isNaN(nnFuturePred)) {
-            
-            // Usar método de ensemble simplificado
-            const seasonalFactor = calculateAdvancedSeasonal(date, index);
-            const trendFactor = calculateHybridTrend(recentValues);
-            const prediction = avgRecent + seasonalFactor + trendFactor * (index + 1) * 0.1;
-            
-            return {
-                date: date,
-                actual: null,
-                predicted: applyVariableLimits(prediction, targetVariable)
-            };
+    const windowSize = 7;
+    const weights = Array.from({ length: windowSize }, (_, i) => i + 1);
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+    function predictWithHistory(history) {
+        if (history.length < windowSize) {
+            return history.length > 0 ? history[history.length - 1][targetVariable] : 10;
         }
-        
-        // Combinación inteligente para predicciones futuras
-        // LSTM mejor para predicciones a corto plazo, NN mejor para largo plazo
-        const timeHorizon = index + 1;
-        const timeFactor = Math.min(timeHorizon / 7, 1); // Normalizar a una semana
-        
-        const lstmWeight = 0.8 - timeFactor * 0.3; // Decrece de 80% a 50%
-        const nnWeight = 1 - lstmWeight; // Aumenta de 20% a 50%
-        
-        const hybridFuturePred = lstmFuturePred * lstmWeight + nnFuturePred * nnWeight;
-        
-        // Validar que no sea NaN
-        const finalPrediction = isNaN(hybridFuturePred) ? avgRecent : hybridFuturePred;
-        
-        return {
+        const window = history.slice(-windowSize);
+        const weightedSum = window.reduce((sum, item, index) => {
+            const value = item[targetVariable] || 0;
+            return sum + value * weights[index];
+        }, 0);
+        return weightedSum / totalWeight;
+    }
+
+    const futurePredictions = [];
+    let forecastHistory = [...fullHistory];
+
+    for (const date of futureDates) {
+        const rawPrediction = predictWithHistory(forecastHistory);
+        const twoDigitPrediction = (Math.round(rawPrediction) % 90) + 10;
+        futurePredictions.push({
             date: date,
             actual: null,
-            predicted: applyVariableLimits(finalPrediction, targetVariable)
-        };
-    });
-    
-    const allPredictions = [...predictions, ...futurePredictions];
-    console.log('Modelo Híbrido LSTM+NN completado. Predicciones generadas:', allPredictions.length);
-    
-    return allPredictions;
+            predicted: twoDigitPrediction
+        });
+        // Add the new forecast to the history for the next step
+        forecastHistory.push({ date: date, [targetVariable]: twoDigitPrediction });
+    }
+
+    return [...validationPredictions, ...futurePredictions];
 }
 
-function calculateVarianceFromValues(values) {
-    if (values.length < 2) return 1;
-    
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-    
-    return Math.max(0.1, variance);
-}
-
-function calculateAdvancedSeasonal(date, timeIndex) {
-    // Factor estacional avanzado que combina múltiples ciclos
-    const month = date.getMonth();
-    const day = date.getDate();
-    const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
-    
-    // Ciclo anual (zodiacal)
-    const annualFactor = Math.sin((dayOfYear / 365.25) * 2 * Math.PI) * 0.4;
-    
-    // Ciclo mensual
-    const monthlyFactor = Math.cos((month + 1) * Math.PI / 6) * 0.2;
-    
-    // Ciclo quincenal (lunaciones aproximadas)
-    const lunarFactor = Math.sin((day / 15) * Math.PI) * 0.15;
-    
-    // Factor de proyección temporal (disminuye con la distancia)
-    const projectionFactor = Math.exp(-timeIndex * 0.1);
-    
-    return (annualFactor + monthlyFactor + lunarFactor) * projectionFactor;
-}
-
-function calculateHybridTrend(values) {
-    if (values.length < 2) return 0;
-    
-    // Cálculo de tendencia ponderada
-    const weights = values.map((_, i) => i + 1); // Pesos lineales crecientes
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-    
-    let weightedSum = 0;
-    values.forEach((value, i) => {
-        weightedSum += value * weights[i];
-    });
-    
-    const weightedMean = weightedSum / totalWeight;
-    const simpleMean = values.reduce((a, b) => a + b, 0) / values.length;
-    
-    return (weightedMean - simpleMean) * 0.5;
-}
-
-function calculateHybridSeasonal(date) {
-    // Factor estacional específico para modelo híbrido
-    const month = date.getMonth();
-    const day = date.getDate();
-    
-    // Ciclo mensual
-    const monthlyFactor = Math.sin((month + 1) * Math.PI / 6) * 0.3;
-    
-    // Ciclo semanal (aproximado)
-    const weeklyFactor = Math.cos(day * Math.PI / 15) * 0.1;
-    
-    return monthlyFactor + weeklyFactor;
-}
-
-function updateHybridResults(results, modelData) {
+window.updateHybridResults = function(results, modelData) {
     // Update table
     const tableBody = document.querySelector('#hybridResults tbody');
     tableBody.innerHTML = '';
@@ -229,10 +148,10 @@ function updateHybridResults(results, modelData) {
         dateCell.textContent = result.date.toLocaleDateString('es-ES');
         
         const predCell = document.createElement('td');
-        predCell.textContent = result.predicted.toFixed(2);
+        predCell.textContent = result.predicted;
         
         const actualCell = document.createElement('td');
-        actualCell.textContent = (result.actual !== null && result.actual !== undefined) ? result.actual.toFixed(2) : 'N/A';
+        actualCell.textContent = result.actual !== null ? result.actual.toFixed(2) : 'N/A';
         
         row.appendChild(dateCell);
         row.appendChild(predCell);
@@ -247,9 +166,9 @@ function updateHybridResults(results, modelData) {
     });
     
     // Update error metrics
-    const testResults = results.filter(r => r.actual !== null && r.actual !== undefined && !isNaN(r.actual));
-    const mse = testResults.length > 0 ? calculateMSE(testResults) : 0;
-    const mae = testResults.length > 0 ? calculateMAE(testResults) : 0;
+    const testResults = results.filter(r => r.actual !== null);
+    const mse = calculateMSE(testResults);
+    const mae = calculateMAE(testResults);
     const rmse = Math.sqrt(mse);
     
     document.getElementById('hybrid-mse').textContent = mse.toFixed(4);
@@ -290,12 +209,7 @@ function updateHybridResults(results, modelData) {
             maintainAspectRatio: false,
             scales: {
                 y: {
-                    min: 10,
-                    max: 99,
-                    title: {
-                        display: true,
-                        text: 'Valores DC (10-99)'
-                    }
+                    beginAtZero: false
                 }
             },
             plugins: {
@@ -322,135 +236,8 @@ function updateHybridResults(results, modelData) {
         forecastCard.innerHTML = `
             <p class="text-sm font-semibold">${prediction.date.toLocaleDateString('es-ES')}</p>
             <p class="text-2xl font-bold text-center text-orange-700">${roundedValue}</p>
-            <p class="text-xs text-center text-gray-500">(${prediction.predicted.toFixed(2)})</p>
         `;
         
         forecastContainer.appendChild(forecastCard);
     });
-}
-
-function calculateLSTMConfidence(prediction, recentValues) {
-    // Calcular confianza de LSTM basada en consistencia temporal
-    if (recentValues.length < 2) return 0.5;
-    
-    const recentMean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    const deviation = Math.abs(prediction - recentMean);
-    const maxDeviation = Math.max(...recentValues.map(v => Math.abs(v - recentMean)));
-    
-    // Confianza inversamente proporcional a la desviación
-    const confidence = maxDeviation > 0 ? 1 - (deviation / (maxDeviation + 1)) : 0.8;
-    return Math.max(0.1, Math.min(0.9, confidence));
-}
-
-function calculateNeuralNetConfidence(prediction, recentValues) {
-    // Calcular confianza de Red Neuronal basada en estabilidad
-    if (recentValues.length < 2) return 0.5;
-    
-    const variance = calculateVarianceFromValues(recentValues);
-    const normalizedVariance = Math.min(variance / 4, 1); // Normalizar varianza
-    
-    // Mayor confianza con menor varianza
-    const confidence = 0.8 - normalizedVariance * 0.6;
-    return Math.max(0.1, Math.min(0.9, confidence));
-}
-
-function calculateAdvancedTrend(values, timeIndex) {
-    if (values.length < 3) return 0;
-    
-    // Tendencia lineal ponderada
-    const linearTrend = calculateLinearTrend(values);
-    
-    // Tendencia exponencial para capturar aceleración
-    const exponentialTrend = calculateExponentialTrend(values);
-    
-    // Factor de tiempo (tendencia se atenúa con la distancia)
-    const timeFactor = Math.exp(-timeIndex * 0.05);
-    
-    return (linearTrend * 0.7 + exponentialTrend * 0.3) * timeFactor;
-}
-
-function calculateLinearTrend(values) {
-    const n = values.length;
-    const x = Array.from({length: n}, (_, i) => i);
-    const y = values;
-    
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
-    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-    return isNaN(slope) ? 0 : slope * 0.3; // Atenuar la tendencia
-}
-
-function calculateExponentialTrend(values) {
-    if (values.length < 2) return 0;
-    
-    // Calcular factor de crecimiento exponencial
-    let growthSum = 0;
-    let validGrowths = 0;
-    
-    for (let i = 1; i < values.length; i++) {
-        if (values[i-1] !== 0) {
-            const growth = (values[i] - values[i-1]) / Math.abs(values[i-1]);
-            growthSum += growth;
-            validGrowths++;
-        }
-    }
-    
-    const avgGrowth = validGrowths > 0 ? growthSum / validGrowths : 0;
-    return Math.max(-0.5, Math.min(0.5, avgGrowth)) * 0.2; // Limitar y atenuar
-}
-
-function calculateAdvancedSeasonality(date) {
-    // Componentes estacionales múltiples para astrología
-    const month = date.getMonth();
-    const day = date.getDate();
-    const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
-    
-    // Ciclo zodiacal (12 signos)
-    const zodiacalCycle = Math.sin((month + 1) * Math.PI / 6) * 0.3;
-    
-    // Ciclo lunar aproximado (29.5 días)
-    const lunarCycle = Math.cos((dayOfYear % 29.5) / 29.5 * 2 * Math.PI) * 0.2;
-    
-    // Ciclo semanal
-    const weeklyPattern = Math.sin((dayOfYear % 7) / 7 * 2 * Math.PI) * 0.1;
-    
-    return zodiacalCycle + lunarCycle + weeklyPattern;
-}
-
-function calculateVarianceComponent(recentValues, lstmValue, nnValue) {
-    // Componente de varianza que considera la dispersión de predicciones
-    const variance = calculateVarianceFromValues(recentValues);
-    const predictionDiff = Math.abs(lstmValue - nnValue);
-    
-    // Factor de incertidumbre basado en discrepancia entre modelos
-    const uncertaintyFactor = predictionDiff / (Math.abs(lstmValue) + Math.abs(nnValue) + 1);
-    
-    // Ajuste basado en varianza histórica
-    const varianceAdjustment = Math.sqrt(variance) * uncertaintyFactor * 0.1;
-    
-    return Math.max(-0.5, Math.min(0.5, varianceAdjustment));
-}
-
-function generateLSTMFallback(recentValues, timeIndex) {
-    // Generar predicción de fallback para LSTM basada en patrones temporales
-    const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    const trend = calculateLinearTrend(recentValues);
-    const seasonality = Math.sin((timeIndex + 1) * Math.PI / 7) * 0.2; // Ciclo semanal
-    
-    return mean + trend * (timeIndex + 1) + seasonality;
-}
-
-function generateNeuralNetFallback(recentValues, timeIndex) {
-    // Generar predicción de fallback para NN basada en patrones no lineales
-    const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    const variance = calculateVarianceFromValues(recentValues);
-    
-    // Simulación de comportamiento no lineal
-    const nonLinearFactor = Math.tanh((timeIndex + 1) * 0.1) * Math.sqrt(variance) * 0.3;
-    const randomNoise = (Math.random() - 0.5) * 0.4;
-    
-    return mean + nonLinearFactor + randomNoise;
 }

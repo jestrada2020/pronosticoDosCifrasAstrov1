@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Debug Completo</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+</head>
+<body>
+    <h1>Test Debug Completo</h1>
+    <button onclick="testXGBoost()">Probar XGBoost</button>
+    <div id="result"></div>
+    
+    <script>
+        function testXGBoost() {
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                console.log('=== INICIANDO TEST XGBOOST ===');
+                
+                // Check if function exists
+                if (typeof runXGBoostModel !== 'function') {
+                    throw new Error('runXGBoostModel is not defined');
+                }
+                
+                console.log('✅ runXGBoostModel está disponible');
+                
+                // Create test data
+                const testTrainData = [
+                    { date: new Date('2023-01-01'), DC: 45, EXT: 55, ULT2: 65 },
+                    { date: new Date('2023-01-02'), DC: 47, EXT: 57, ULT2: 67 }
+                ];
+                
+                const testTestData = [
+                    { date: new Date('2023-01-03'), DC: 42, EXT: 52, ULT2: 62 }
+                ];
+                
+                const testFutureDates = [
+                    new Date('2023-01-04'),
+                    new Date('2023-01-05')
+                ];
+                
+                console.log('Test data prepared');
+                
+                // Try to call the function
+                runXGBoostModel(testTrainData, testTestData, testFutureDates, 'DC')
+                    .then(result => {
+                        console.log('✅ XGBoost ejecutado exitosamente:', result);
+                        resultDiv.innerHTML = '<p style="color: green;">✅ XGBoost funciona correctamente</p>';
+                    })
+                    .catch(error => {
+                        console.error('❌ Error ejecutando XGBoost:', error);
+                        resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+                    });
+                
+            } catch (error) {
+                console.error('❌ Error en test:', error);
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            console.log('=== VERIFICANDO CARGA DE ARCHIVOS ===');
+            console.log('runXGBoostModel disponible:', typeof runXGBoostModel);
+            console.log('prepareDataForModels disponible:', typeof prepareDataForModels);
+            console.log('processData disponible:', typeof processData);
+            
+            // Show status
+            document.getElementById('result').innerHTML = 
+                `<p>runXGBoostModel: ${typeof runXGBoostModel}<br>
+                 prepareDataForModels: ${typeof prepareDataForModels}<br>
+                 processData: ${typeof processData}</p>`;
+        });
+    </script>
+</body>
+</html>

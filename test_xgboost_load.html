@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Carga XGBoost</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+</head>
+<body>
+    <h1>Test Carga XGBoost</h1>
+    <div id="result"></div>
+    
+    <script>
+        window.addEventListener('load', () => {
+            const resultDiv = document.getElementById('result');
+            
+            // Test if function is defined
+            if (typeof runXGBoostModel === 'function') {
+                resultDiv.innerHTML = '<p style="color: green;">✅ runXGBoostModel está definida correctamente</p>';
+                console.log('✅ runXGBoostModel está disponible');
+                console.log('Función:', runXGBoostModel.toString().substring(0, 200) + '...');
+            } else {
+                resultDiv.innerHTML = '<p style="color: red;">❌ runXGBoostModel NO está definida</p>';
+                console.error('❌ runXGBoostModel no está disponible');
+                
+                // Check what's available in global scope
+                console.log('Variables globales relacionadas con XGBoost:', 
+                    Object.keys(window).filter(key => key.toLowerCase().includes('xgboost')));
+            }
+            
+            // Test other functions too
+            const functions = ['calculateMSE', 'calculateMAE', 'updateXGBoostResults'];
+            functions.forEach(funcName => {
+                if (typeof window[funcName] === 'function') {
+                    console.log(`✅ ${funcName} está disponible`);
+                } else {
+                    console.log(`❌ ${funcName} NO está disponible`);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Solución Robusta XGBoost</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <!-- Intencionalmente NO incluir xgboost.js para probar la recuperación -->
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; max-height: 300px; overflow-y: auto; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test Solución Robusta XGBoost</h1>
+    
+    <div class="test">
+        <h3>Escenario: xgboost.js NO incluido intencionalmente</h3>
+        <p>Este test verifica que el sistema puede recuperarse automáticamente cuando faltan archivos JS.</p>
+    </div>
+    
+    <button onclick="testRobustSolution()">Probar Solución Robusta</button>
+    <button onclick="clearLogs()">Limpiar Logs</button>
+    
+    <div id="status"></div>
+    <div id="results"></div>
+    <pre id="logs"></pre>
+
+    <script>
+        let allLogs = [];
+        
+        // Capture logs
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function captureLog(level, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            allLogs.push(`[${timestamp}] ${level}: ${message}`);
+            
+            if (level === 'LOG') originalLog(...args);
+            else if (level === 'WARN') originalWarn(...args);
+            else if (level === 'ERROR') originalError(...args);
+            
+            updateLogsDisplay();
+        }
+        
+        function updateLogsDisplay() {
+            document.getElementById('logs').textContent = allLogs.slice(-50).join('\n');
+        }
+        
+        function clearLogs() {
+            allLogs = [];
+            updateLogsDisplay();
+        }
+        
+        console.log = (...args) => captureLog('LOG', ...args);
+        console.warn = (...args) => captureLog('WARN', ...args);
+        console.error = (...args) => captureLog('ERROR', ...args);
+        
+        // Copy robust functions from events.js
+        function getRobustFunction(functionName, fallbackFunction = null) {
+            // Try window object first
+            if (typeof window[functionName] === 'function') {
+                return window[functionName];
+            }
+            
+            // Try global scope
+            try {
+                const globalFunc = eval(functionName);
+                if (typeof globalFunc === 'function') {
+                    return globalFunc;
+                }
+            } catch (e) {
+                // Function doesn't exist in global scope
+            }
+            
+            // Return fallback if provided
+            if (fallbackFunction && typeof fallbackFunction === 'function') {
+                console.warn(`⚠️ Usando función de respaldo para ${functionName}`);
+                return fallbackFunction;
+            }
+            
+            // Return null if nothing found
+            console.error(`❌ Función ${functionName} no encontrada y sin respaldo`);
+            return null;
+        }
+        
+        function createFallbackXGBoost() {
+            return async function(trainData, testData, futureDates, targetVariable) {
+                console.warn('🔧 Ejecutando XGBoost de respaldo (modo simplificado)');
+                
+                const validationPredictions = testData.map((item, index) => {
+                    // Simple prediction based on other features
+                    let score = 0;
+                    let count = 0;
+                    
+                    for (const key in item) {
+                        if (key !== 'date' && key !== targetVariable && typeof item[key] === 'number') {
+                            score += item[key];
+                            count++;
+                        }
+                    }
+                    
+                    const avgValue = count > 0 ? score / count : 60;
+                    const prediction = Math.max(40, Math.min(99, 
+                        Math.round(avgValue + (Math.random() - 0.5) * 15)
+                    ));
+                    
+                    return {
+                        date: item.date,
+                        actual: item[targetVariable], // Preserve actual values correctly
+                        predicted: prediction
+                    };
+                });
+                
+                const futurePredictions = futureDates.map(date => {
+                    const lastValidation = validationPredictions[validationPredictions.length - 1];
+                    const basePrediction = lastValidation ? lastValidation.predicted : 60;
+                    const prediction = Math.max(40, Math.min(99, 
+                        Math.round(basePrediction + (Math.random() - 0.5) * 10)
+                    ));
+                    
+                    return {
+                        date: date,
+                        actual: null,
+                        predicted: prediction
+                    };
+                });
+                
+                return {
+                    validation: validationPredictions,
+                    future: futurePredictions
+                };
+            };
+        }
+        
+        async function ensureModelFunctionsLoaded() {
+            console.log('=== VERIFICANDO Y CARGANDO FUNCIONES DE MODELOS ===');
+            
+            const requiredFunctions = [
+                { name: 'runXGBoostModel', file: 'xgboost.js' }
+            ];
+            
+            for (const func of requiredFunctions) {
+                // Check if function exists in window or global scope
+                const functionExists = typeof window[func.name] === 'function' || 
+                                      typeof eval(`typeof ${func.name}`) === 'function';
+                
+                if (!functionExists) {
+                    console.warn(`⚠️ ${func.name} no encontrada, recargando ${func.file}...`);
+                    
+                    try {
+                        // Remove existing script if present
+                        const existingScript = document.querySelector(`script[src="${func.file}"]`);
+                        if (existingScript) {
+                            existingScript.remove();
+                        }
+                        
+                        // Load script dynamically
+                        await new Promise((resolve, reject) => {
+                            const script = document.createElement('script');
+                            script.src = func.file;
+                            script.onload = () => {
+                                console.log(`✅ ${func.file} recargado exitosamente`);
+                                resolve();
+                            };
+                            script.onerror = () => {
+                                console.error(`❌ Error recargando ${func.file}`);
+                                reject(new Error(`No se pudo cargar ${func.file}`));
+                            };
+                            document.head.appendChild(script);
+                        });
+                        
+                        // Wait for script initialization
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                    } catch (error) {
+                        console.error(`Error cargando ${func.file}:`, error);
+                        
+                        // Create fallback function if critical
+                        if (func.name === 'runXGBoostModel') {
+                            window[func.name] = createFallbackXGBoost();
+                            console.log(`✅ Función de respaldo creada para ${func.name}`);
+                        }
+                    }
+                } else {
+                    console.log(`✅ ${func.name} ya disponible`);
+                }
+            }
+        }
+        
+        async function testRobustSolution() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            
+            try {
+                statusEl.innerHTML = '<span class="warning">🔄 Ejecutando test robusto...</span>';
+                
+                console.log('=== INICIANDO TEST SOLUCIÓN ROBUSTA ===');
+                
+                // Step 1: Verify initial state (should not have XGBoost)
+                console.log('Estado inicial - runXGBoostModel disponible:', typeof runXGBoostModel !== 'undefined');
+                
+                // Step 2: Try to ensure functions are loaded
+                await ensureModelFunctionsLoaded();
+                
+                // Step 3: Get function robustly
+                const xgboostFunction = getRobustFunction('runXGBoostModel', createFallbackXGBoost());
+                
+                if (!xgboostFunction) {
+                    throw new Error('No se pudo obtener función XGBoost');
+                }
+                
+                console.log('✅ Función XGBoost obtenida:', typeof xgboostFunction);
+                
+                // Step 4: Create test data
+                const testData = [
+                    { date: new Date('2023-01-01'), DC: 45, EXT: 55, ULT2: 65, PM2: 75 },
+                    { date: new Date('2023-01-02'), DC: 47, EXT: 57, ULT2: 67, PM2: 77 }
+                ];
+                
+                const futureDates = [
+                    new Date('2023-01-03'),
+                    new Date('2023-01-04')
+                ];
+                
+                // Step 5: Execute function
+                console.log('🧪 Ejecutando función XGBoost...');
+                const result = await xgboostFunction(testData, testData, futureDates, 'DC');
+                
+                console.log('✅ Resultado obtenido:', result);
+                
+                // Step 6: Verify results
+                const hasValidation = result.validation && result.validation.length > 0;
+                const hasFuture = result.future && result.future.length > 0;
+                const hasActualValues = result.validation.every(r => r.actual !== null && r.actual !== undefined);
+                
+                let html = '<h3>Resultados del Test</h3>';
+                html += `<p><strong>Validación:</strong> ${hasValidation ? '✅' : '❌'} (${result.validation?.length || 0} registros)</p>`;
+                html += `<p><strong>Futuro:</strong> ${hasFuture ? '✅' : '❌'} (${result.future?.length || 0} registros)</p>`;
+                html += `<p><strong>Valores actuales:</strong> ${hasActualValues ? '✅' : '❌'}</p>`;
+                
+                if (hasValidation) {
+                    html += '<h4>Muestra de Validación:</h4><table border="1"><tr><th>Fecha</th><th>Actual</th><th>Predicción</th></tr>';
+                    result.validation.forEach(r => {
+                        html += `<tr><td>${r.date.toLocaleDateString()}</td><td>${r.actual}</td><td>${r.predicted}</td></tr>`;
+                    });
+                    html += '</table>';
+                }
+                
+                resultsEl.innerHTML = html;
+                statusEl.innerHTML = '<span class="success">✅ Test completado exitosamente</span>';
+                
+            } catch (error) {
+                console.error('❌ Error en test:', error);
+                statusEl.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+                resultsEl.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            console.log('🚀 Test de solución robusta cargado');
+            console.log('Estado inicial - runXGBoostModel:', typeof runXGBoostModel);
+        });
+    </script>
+</body>
+</html>

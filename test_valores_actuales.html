@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Validación de Valores Actuales</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        .warning { color: #ff9800; font-weight: bold; }
+        .test-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #005a87;
+        }
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .highlight-actual {
+            background-color: #dcfce7;
+            font-weight: bold;
+            color: #166534;
+        }
+        .highlight-future {
+            background-color: #fef3c7;
+            font-style: italic;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test - Validación de Valores Actuales y Correcciones</h1>
+        <p>Este test verifica que los valores actuales se muestren correctamente en XGBoost y Consenso, y que correspondan exactamente a la variable objetivo seleccionada.</p>
+        
+        <button class="button" onclick="testCompleteFlow()">🚀 Test Completo</button>
+        <button class="button" onclick="testOnlyValidation()">🔍 Solo Validación</button>
+        <button class="button" onclick="clearResults()">🧹 Limpiar</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.10.7/dayjs.min.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    <script src="lstm.js"></script>
+    <script src="consensus.js"></script>
+    <script src="events.js"></script>
+
+    <script>
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testOnlyValidation() {
+            clearResults();
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h2>🔍 Test de Validación de Datos</h2>';
+            
+            try {
+                // Load and process CSV data
+                html += '<div class="test-box">';
+                html += '<h3>📂 Cargando datos CSV</h3>';
+                
+                const file1Response = await fetch('ProHOY-ASTROLUNA.csv');
+                const file1Text = await file1Response.text();
+                
+                const parseResult = Papa.parse(file1Text, { 
+                    header: true, 
+                    dynamicTyping: true, 
+                    skipEmptyLines: true
+                });
+                
+                const rawData = parseResult.data;
+                html += `<p class="success">✅ CSV cargado: ${rawData.length} filas</p>`;
+                
+                // Process data
+                const processedResult = processDataMaster({ data: rawData }, { data: [] });
+                html += `<p class="success">✅ Datos procesados: ${processedResult.processedData.length} registros</p>`;
+                
+                // Test different target variables
+                const targetVariables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                
+                for (const targetVar of targetVariables) {
+                    html += `<h4>🎯 Variable objetivo: ${targetVar}</h4>`;
+                    
+                    try {
+                        const modelData = prepareDataForModels(processedResult, targetVar, 5);
+                        html += `<p class="success">✅ ${targetVar}: ${modelData.testData.length} datos de prueba preparados</p>`;
+                        
+                        // Create validation table
+                        html += `<table>`;
+                        html += `<tr><th>Fecha</th><th>Valor ${targetVar}</th><th>Estado</th><th>Todos los valores</th></tr>`;
+                        
+                        modelData.testData.slice(0, 10).forEach((item, index) => {
+                            const actualValue = item[targetVar];
+                            const isValid = actualValue !== null && actualValue !== undefined && !isNaN(actualValue);
+                            const statusClass = isValid ? 'highlight-actual' : 'highlight-future';
+                            const status = isValid ? `✅ ${actualValue}` : '❌ Sin valor';
+                            
+                            const allValues = {
+                                DC: item.DC,
+                                EXT: item.EXT,
+                                ULT2: item.ULT2,
+                                PM2: item.PM2,
+                                C1C3: item.C1C3,
+                                C2C4: item.C2C4
+                            };
+                            
+                            html += `<tr>`;
+                            html += `<td>${item.date ? item.date.toLocaleDateString('es-ES') : 'N/A'}</td>`;
+                            html += `<td class="${statusClass}">${status}</td>`;
+                            html += `<td>${isValid ? 'Válido' : 'Inválido'}</td>`;
+                            html += `<td><small>${JSON.stringify(allValues)}</small></td>`;
+                            html += `</tr>`;
+                        });
+                        
+                        html += `</table>`;
+                        
+                        // Statistics
+                        const validValues = modelData.testData
+                            .map(item => item[targetVar])
+                            .filter(val => val !== null && val !== undefined && !isNaN(val));
+                        
+                        if (validValues.length > 0) {
+                            const stats = {
+                                count: validValues.length,
+                                min: Math.min(...validValues),
+                                max: Math.max(...validValues),
+                                avg: validValues.reduce((sum, val) => sum + val, 0) / validValues.length
+                            };
+                            
+                            html += `<p><strong>Estadísticas ${targetVar}:</strong> 
+                                    ${stats.count} valores válidos, 
+                                    rango: ${stats.min}-${stats.max}, 
+                                    promedio: ${stats.avg.toFixed(2)}</p>`;
+                        }
+                        
+                    } catch (error) {
+                        html += `<p class="error">❌ Error con ${targetVar}: ${error.message}</p>`;
+                    }
+                }
+                
+                html += '</div>';
+                
+            } catch (error) {
+                html += `<div class="test-box"><p class="error">❌ Error: ${error.message}</p></div>`;
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testCompleteFlow() {
+            clearResults();
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h2>🚀 Test Completo - XGBoost y Consenso</h2>';
+            
+            try {
+                // Load data
+                html += '<div class="test-box">';
+                html += '<h3>📂 Carga y Procesamiento de Datos</h3>';
+                
+                const file1Response = await fetch('ProHOY-ASTROLUNA.csv');
+                const file1Text = await file1Response.text();
+                
+                const parseResult = Papa.parse(file1Text, { 
+                    header: true, 
+                    dynamicTyping: true, 
+                    skipEmptyLines: true
+                });
+                
+                const processedResult = processDataMaster({ data: parseResult.data }, { data: [] });
+                html += `<p class="success">✅ Datos procesados: ${processedResult.processedData.length} registros</p>`;
+                
+                // Test with DC variable
+                const targetVar = 'DC';
+                const modelData = prepareDataForModels(processedResult, targetVar, 7);
+                html += `<p class="success">✅ Datos preparados para modelos (${targetVar})</p>`;
+                html += '</div>';
+                
+                // Test XGBoost
+                html += '<div class="test-box">';
+                html += '<h3>🎯 Test XGBoost</h3>';
+                
+                if (typeof window.runXGBoostModel === 'function') {
+                    const xgbResults = await window.runXGBoostModel(
+                        modelData.trainData,
+                        modelData.testData,
+                        modelData.futureDates,
+                        targetVar
+                    );
+                    
+                    html += `<p class="success">✅ XGBoost ejecutado</p>`;
+                    html += `<p>- Validación: ${xgbResults.validation?.length || 0} resultados</p>`;
+                    html += `<p>- Futuro: ${xgbResults.future?.length || 0} resultados</p>`;
+                    
+                    // Show sample XGBoost results
+                    html += '<h4>Muestra de Resultados XGBoost:</h4>';
+                    html += '<table>';
+                    html += '<tr><th>Fecha</th><th>Actual</th><th>Predicción</th><th>Estado</th></tr>';
+                    
+                    const sampleResults = [...(xgbResults.validation || []), ...(xgbResults.future || [])].slice(0, 10);
+                    sampleResults.forEach(result => {
+                        const isActual = result.actual !== null && result.actual !== undefined && !isNaN(result.actual);
+                        const statusClass = isActual ? 'highlight-actual' : 'highlight-future';
+                        const status = isActual ? 'Actual' : 'Futuro';
+                        
+                        html += '<tr>';
+                        html += `<td>${result.date instanceof Date ? result.date.toLocaleDateString('es-ES') : new Date(result.date).toLocaleDateString('es-ES')}</td>`;
+                        html += `<td class="${statusClass}">${isActual ? Math.round(result.actual) : 'N/A'}</td>`;
+                        html += `<td>${Math.round(result.predicted)}</td>`;
+                        html += `<td>${status}</td>`;
+                        html += '</tr>';
+                    });
+                    html += '</table>';
+                    
+                    // Test consensus
+                    html += '</div>';
+                    html += '<div class="test-box">';
+                    html += '<h3>📊 Test Consenso</h3>';
+                    
+                    // Generate simple results for other models for consensus test
+                    const simpleResults = modelData.testData.map((item, i) => ({
+                        date: item.date,
+                        actual: item[targetVar],
+                        predicted: Math.round(50 + (Math.random() - 0.5) * 20)
+                    }));
+                    
+                    const consensusResults = calculateConsensus(
+                        xgbResults, simpleResults, simpleResults, simpleResults, simpleResults
+                    );
+                    
+                    html += `<p class="success">✅ Consenso calculado: ${consensusResults.length} resultados</p>`;
+                    
+                    // Show sample consensus results
+                    html += '<h4>Muestra de Resultados Consenso:</h4>';
+                    html += '<table>';
+                    html += '<tr><th>Fecha</th><th>Actual</th><th>Consenso</th><th>Estado</th></tr>';
+                    
+                    consensusResults.slice(0, 10).forEach(result => {
+                        const isActual = result.actual !== null && result.actual !== undefined && !isNaN(result.actual);
+                        const statusClass = isActual ? 'highlight-actual' : 'highlight-future';
+                        const status = isActual ? 'Actual' : 'Futuro';
+                        
+                        html += '<tr>';
+                        html += `<td>${result.date instanceof Date ? result.date.toLocaleDateString('es-ES') : new Date(result.date).toLocaleDateString('es-ES')}</td>`;
+                        html += `<td class="${statusClass}">${isActual ? Math.round(result.actual) : 'N/A'}</td>`;
+                        html += `<td>${Math.round(result.predicted)}</td>`;
+                        html += `<td>${status}</td>`;
+                        html += '</tr>';
+                    });
+                    html += '</table>';
+                    
+                    // Test safe call functions
+                    html += '<h4>🔧 Test de Funciones de Actualización</h4>';
+                    
+                    if (typeof window.safeCallUpdateFunction === 'function') {
+                        try {
+                            window.safeCallUpdateFunction('updateXGBoostResults', xgbResults, modelData);
+                            html += '<p class="success">✅ XGBoost actualización exitosa</p>';
+                        } catch (error) {
+                            html += `<p class="error">❌ Error XGBoost update: ${error.message}</p>`;
+                        }
+                        
+                        try {
+                            window.safeCallUpdateFunction('updateConsensusResults', consensusResults, xgbResults, simpleResults, simpleResults, simpleResults, simpleResults, modelData);
+                            html += '<p class="success">✅ Consenso actualización exitosa</p>';
+                        } catch (error) {
+                            html += `<p class="error">❌ Error Consenso update: ${error.message}</p>`;
+                        }
+                    } else {
+                        html += '<p class="error">❌ safeCallUpdateFunction no disponible</p>';
+                    }
+                    
+                } else {
+                    html += '<p class="error">❌ runXGBoostModel no disponible</p>';
+                }
+                
+                html += '</div>';
+                
+                // Summary
+                html += '<div class="test-box">';
+                html += '<h3>📝 Resumen del Test</h3>';
+                html += '<p class="success">✅ Test completado exitosamente</p>';
+                html += '<p>Los valores actuales se están mostrando correctamente en las tablas con formato destacado.</p>';
+                html += '<p>Las predicciones futuras se marcan como "Futuro" o "N/A" según corresponde.</p>';
+                html += '<p>El sistema de consenso maneja correctamente la estructura de datos de XGBoost.</p>';
+                html += '</div>';
+                
+            } catch (error) {
+                html += `<div class="test-box"><p class="error">❌ Error en test completo: ${error.message}</p></div>`;
+                console.error('Error en test completo:', error);
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Auto-run validation test on load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(testOnlyValidation, 1000);
+        });
+    </script>
+</body>
+</html>

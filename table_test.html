@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Table Update Test</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Table Update Test</h1>
+    <button onclick="testTableUpdate()">Test Table Update</button>
+    
+    <table id="testTable">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Predicción</th>
+                <th>Valor Actual</th>
+            </tr>
+        </thead>
+        <tbody id="testTableBody">
+        </tbody>
+    </table>
+    
+    <div id="log"></div>
+    
+    <script>
+        function testTableUpdate() {
+            console.clear();
+            console.log('=== TEST TABLE UPDATE ===');
+            
+            // Mock data similar to what XGBoost would produce
+            const testResults = [
+                {
+                    date: new Date('2023-04-01'),
+                    predicted: 75.5,
+                    actual: 45
+                },
+                {
+                    date: new Date('2023-04-02'),
+                    predicted: 82.3,
+                    actual: 47
+                },
+                {
+                    date: new Date('2023-04-03'),
+                    predicted: 68.1,
+                    actual: 42
+                }
+            ];
+            
+            console.log('Test results:', testResults);
+            
+            const tableBody = document.getElementById('testTableBody');
+            tableBody.innerHTML = '';
+            
+            testResults.forEach((result, index) => {
+                console.log(`Processing result ${index}:`, result);
+                
+                const row = document.createElement('tr');
+                
+                const dateCell = document.createElement('td');
+                dateCell.textContent = result.date ? result.date.toLocaleDateString('es-ES') : 'N/A';
+                console.log(`Date cell: ${dateCell.textContent}`);
+                
+                const predCell = document.createElement('td');
+                predCell.textContent = result.predicted !== undefined ? result.predicted : 'N/A';
+                console.log(`Pred cell: ${predCell.textContent}`);
+                
+                const actualCell = document.createElement('td');
+                actualCell.textContent = result.actual !== null && result.actual !== undefined ? result.actual.toFixed(2) : 'N/A';
+                console.log(`Actual cell: ${actualCell.textContent}`);
+                console.log(`Actual value type: ${typeof result.actual}, value: ${result.actual}`);
+                
+                row.appendChild(dateCell);
+                row.appendChild(predCell);
+                row.appendChild(actualCell);
+                
+                tableBody.appendChild(row);
+            });
+            
+            document.getElementById('log').innerHTML = '<p>Check console for detailed logs</p>';
+        }
+    </script>
+</body>
+</html>

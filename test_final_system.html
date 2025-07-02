@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Final del Sistema - AstroLuna</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section.passed {
+            border-color: #4CAF50;
+            background-color: #f0fff0;
+        }
+        .test-section.failed {
+            border-color: #f44336;
+            background-color: #fff0f0;
+        }
+        .test-section.warning {
+            border-color: #ff9800;
+            background-color: #fff8f0;
+        }
+        .status {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 3px;
+            color: white;
+        }
+        .status.passed { background-color: #4CAF50; }
+        .status.failed { background-color: #f44336; }
+        .status.warning { background-color: #ff9800; }
+        .log {
+            background-color: #f9f9f9;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #007cba;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #005a87;
+        }
+        .warning-text {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .success-text {
+            color: #2e7d32;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Final del Sistema AstroLuna</h1>
+        <p>Validación completa de todos los componentes y funcionalidades</p>
+        
+        <button class="button" onclick="runAllTests()">🚀 Ejecutar Todos los Tests</button>
+        <button class="button" onclick="clearResults()">🧹 Limpiar Resultados</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    <script src="lstm.js"></script>
+    <script src="events.js"></script>
+
+    <script>
+        let testResults = {
+            passed: 0,
+            failed: 0,
+            warnings: 0
+        };
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            testResults = { passed: 0, failed: 0, warnings: 0 };
+        }
+
+        function addTestResult(title, status, details, logData = null) {
+            const resultsDiv = document.getElementById('results');
+            const testDiv = document.createElement('div');
+            testDiv.className = `test-section ${status}`;
+            
+            testResults[status]++;
+            
+            let html = `
+                <h3>${title} <span class="status ${status}">${status.toUpperCase()}</span></h3>
+                <p>${details}</p>
+            `;
+            
+            if (logData) {
+                html += `<div class="log">${logData}</div>`;
+            }
+            
+            testDiv.innerHTML = html;
+            resultsDiv.appendChild(testDiv);
+        }
+
+        async function runAllTests() {
+            clearResults();
+            console.log('🚀 INICIANDO BATERÍA COMPLETA DE TESTS');
+            
+            try {
+                // Test 1: Verificar carga de archivos JS
+                await testJavaScriptLoading();
+                
+                // Test 2: Verificar funciones de modelos
+                await testModelFunctions();
+                
+                // Test 3: Simular datos y probar procesamiento
+                await testDataProcessing();
+                
+                // Test 4: Probar modelos con datos reales
+                await testModelsWithRealData();
+                
+                // Test 5: Validar valores actuales vs predicciones
+                await testActualVsPredicted();
+                
+                // Test 6: Probar robustez del sistema
+                await testSystemRobustness();
+                
+                // Resumen final
+                showFinalSummary();
+                
+            } catch (error) {
+                console.error('Error en tests:', error);
+                addTestResult('❌ Error Crítico en Tests', 'failed', 
+                    `Error inesperado: ${error.message}`, error.stack);
+            }
+        }
+
+        async function testJavaScriptLoading() {
+            console.log('=== TEST 1: CARGA DE ARCHIVOS JS ===');
+            
+            const requiredFiles = [
+                'main.js', 'xgboost.js', 'lightgbm.js', 
+                'neuralnet.js', 'hybrid.js', 'lstm.js', 'events.js'
+            ];
+            
+            let loadedFiles = 0;
+            let details = '';
+            
+            requiredFiles.forEach(file => {
+                const script = document.querySelector(`script[src="${file}"]`);
+                if (script) {
+                    loadedFiles++;
+                    details += `✅ ${file} cargado\n`;
+                } else {
+                    details += `❌ ${file} NO encontrado\n`;
+                }
+            });
+            
+            const status = loadedFiles === requiredFiles.length ? 'passed' : 'failed';
+            addTestResult(
+                '📦 Test Carga de Archivos JavaScript',
+                status,
+                `${loadedFiles}/${requiredFiles.length} archivos cargados correctamente`,
+                details
+            );
+        }
+
+        async function testModelFunctions() {
+            console.log('=== TEST 2: FUNCIONES DE MODELOS ===');
+            
+            const modelFunctions = [
+                'runXGBoostModel',
+                'runLightGBMModel', 
+                'runNeuralNetModel',
+                'runHybridModel',
+                'runLSTMModel'
+            ];
+            
+            let availableFunctions = 0;
+            let details = '';
+            
+            for (const funcName of modelFunctions) {
+                const exists = typeof window[funcName] === 'function';
+                if (exists) {
+                    availableFunctions++;
+                    details += `✅ ${funcName} disponible\n`;
+                } else {
+                    details += `❌ ${funcName} NO disponible\n`;
+                }
+            }
+            
+            const status = availableFunctions >= 3 ? 'passed' : 'failed';
+            addTestResult(
+                '🔧 Test Funciones de Modelos',
+                status,
+                `${availableFunctions}/${modelFunctions.length} funciones disponibles`,
+                details
+            );
+        }
+
+        async function testDataProcessing() {
+            console.log('=== TEST 3: PROCESAMIENTO DE DATOS ===');
+            
+            try {
+                // Crear datos de prueba simulados
+                const testData1 = [
+                    { Fecha: '2024-01-01', DC: 45, EXT: 67, ULT2: 23, PM2: 89, C1C3: 12, C2C4: 56 },
+                    { Fecha: '2024-01-02', DC: 78, EXT: 34, ULT2: 90, PM2: 45, C1C3: 67, C2C4: 23 },
+                    { Fecha: '2024-01-03', DC: 56, EXT: 89, ULT2: 12, PM2: 78, C1C3: 34, C2C4: 90 }
+                ];
+                
+                const testData2 = [
+                    { Fecha: '2024-01-01', DC: 46, EXT: 68, ULT2: 24, PM2: 88, C1C3: 13, C2C4: 57 },
+                    { Fecha: '2024-01-02', DC: 79, EXT: 35, ULT2: 91, PM2: 44, C1C3: 68, C2C4: 24 },
+                    { Fecha: '2024-01-03', DC: 57, EXT: 88, ULT2: 13, PM2: 79, C1C3: 35, C2C4: 91 }
+                ];
+                
+                // Probar procesamiento de datos
+                const processedResult = processData(testData1, testData2);
+                
+                const status = processedResult && processedResult.processedData ? 'passed' : 'failed';
+                const details = `Datos procesados: ${processedResult?.processedData?.length || 0} registros`;
+                
+                addTestResult(
+                    '🗃️ Test Procesamiento de Datos',
+                    status,
+                    details,
+                    JSON.stringify(processedResult?.processedData?.slice(0, 2), null, 2)
+                );
+                
+                return processedResult;
+                
+            } catch (error) {
+                addTestResult(
+                    '🗃️ Test Procesamiento de Datos',
+                    'failed',
+                    `Error: ${error.message}`,
+                    error.stack
+                );
+                return null;
+            }
+        }
+
+        async function testModelsWithRealData() {
+            console.log('=== TEST 4: MODELOS CON DATOS REALES ===');
+            
+            try {
+                // Crear datos de ejemplo más completos
+                const sampleData = [];
+                for (let i = 0; i < 20; i++) {
+                    const date = new Date(2024, 0, i + 1);
+                    sampleData.push({
+                        date: date.toISOString().split('T')[0],
+                        DC: Math.floor(Math.random() * 59) + 40, // 40-99
+                        EXT: Math.floor(Math.random() * 59) + 40,
+                        ULT2: Math.floor(Math.random() * 59) + 40,
+                        PM2: Math.floor(Math.random() * 59) + 40,
+                        C1C3: Math.floor(Math.random() * 59) + 40,
+                        C2C4: Math.floor(Math.random() * 59) + 40
+                    });
+                }
+                
+                const wrappedData = { processedData: sampleData };
+                const modelData = prepareDataForModels(wrappedData, 'DC', 7);
+                
+                let details = `✅ Datos preparados: ${modelData.trainData.length} entrenamiento, ${modelData.testData.length} prueba\n`;
+                details += `✅ Variable objetivo: DC\n`;
+                details += `✅ Fechas futuras: ${modelData.futureDates.length} días\n`;
+                
+                // Probar XGBoost si está disponible
+                if (typeof window.runXGBoostModel === 'function') {
+                    try {
+                        const xgbResult = await window.runXGBoostModel(
+                            modelData.trainData,
+                            modelData.testData,
+                            modelData.futureDates,
+                            'DC'
+                        );
+                        
+                        details += `✅ XGBoost ejecutado: ${xgbResult.validation?.length || 0} validaciones, ${xgbResult.future?.length || 0} predicciones\n`;
+                        
+                        // Validar que los valores actuales son correctos
+                        let correctActuals = 0;
+                        let totalActuals = 0;
+                        
+                        xgbResult.validation?.forEach((item, index) => {
+                            const originalActual = modelData.testData[index]?.DC;
+                            totalActuals++;
+                            if (item.actual === originalActual) {
+                                correctActuals++;
+                            }
+                        });
+                        
+                        details += `✅ Valores actuales correctos: ${correctActuals}/${totalActuals}\n`;
+                        
+                        if (correctActuals === totalActuals) {
+                            addTestResult(
+                                '🎯 Test Modelos con Datos Reales',
+                                'passed',
+                                'Todos los componentes funcionan correctamente',
+                                details
+                            );
+                        } else {
+                            addTestResult(
+                                '🎯 Test Modelos con Datos Reales',
+                                'warning',
+                                'Funcionamiento básico OK, pero algunos valores actuales incorrectos',
+                                details
+                            );
+                        }
+                        
+                        return { modelData, xgbResult };
+                        
+                    } catch (error) {
+                        details += `❌ Error en XGBoost: ${error.message}\n`;
+                        addTestResult(
+                            '🎯 Test Modelos con Datos Reales',
+                            'failed',
+                            'Error al ejecutar modelos',
+                            details
+                        );
+                    }
+                } else {
+                    details += `❌ XGBoost no disponible\n`;
+                    addTestResult(
+                        '🎯 Test Modelos con Datos Reales',
+                        'failed',
+                        'Función XGBoost no encontrada',
+                        details
+                    );
+                }
+                
+            } catch (error) {
+                addTestResult(
+                    '🎯 Test Modelos con Datos Reales',
+                    'failed',
+                    `Error: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+
+        async function testActualVsPredicted() {
+            console.log('=== TEST 5: VALORES ACTUALES VS PREDICCIONES ===');
+            
+            try {
+                // Crear datos con valores conocidos
+                const knownData = [
+                    { date: '2024-01-01', DC: 45, EXT: 67, ULT2: 23 },
+                    { date: '2024-01-02', DC: 78, EXT: 34, ULT2: 90 },
+                    { date: '2024-01-03', DC: 56, EXT: 89, ULT2: 12 }
+                ];
+                
+                const futureDates = ['2024-01-04', '2024-01-05'];
+                
+                if (typeof window.runXGBoostModel === 'function') {
+                    const result = await window.runXGBoostModel(
+                        knownData.slice(0, 2), // train
+                        knownData.slice(2), // test (último elemento)
+                        futureDates,
+                        'DC'
+                    );
+                    
+                    let details = '';
+                    let allCorrect = true;
+                    
+                    // Verificar validación
+                    if (result.validation && result.validation.length > 0) {
+                        result.validation.forEach((item, index) => {
+                            const expectedActual = knownData[2].DC; // 56
+                            const actualInResult = item.actual;
+                            
+                            details += `Validación[${index}]: Esperado=${expectedActual}, Obtenido=${actualInResult}, `;
+                            details += `Correcto=${expectedActual === actualInResult}\n`;
+                            
+                            if (expectedActual !== actualInResult) {
+                                allCorrect = false;
+                            }
+                        });
+                    }
+                    
+                    // Verificar predicciones futuras
+                    if (result.future && result.future.length > 0) {
+                        result.future.forEach((item, index) => {
+                            details += `Futuro[${index}]: Fecha=${item.date}, Actual=${item.actual}, Predicción=${item.predicted}\n`;
+                        });
+                    }
+                    
+                    const status = allCorrect ? 'passed' : 'failed';
+                    addTestResult(
+                        '🎯 Test Valores Actuales vs Predicciones',
+                        status,
+                        allCorrect ? 'Todos los valores actuales son correctos' : 'Algunos valores actuales son incorrectos',
+                        details
+                    );
+                    
+                } else {
+                    addTestResult(
+                        '🎯 Test Valores Actuales vs Predicciones',
+                        'failed',
+                        'XGBoost no disponible para testing',
+                        'La función runXGBoostModel no está cargada'
+                    );
+                }
+                
+            } catch (error) {
+                addTestResult(
+                    '🎯 Test Valores Actuales vs Predicciones',
+                    'failed',
+                    `Error: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+
+        async function testSystemRobustness() {
+            console.log('=== TEST 6: ROBUSTEZ DEL SISTEMA ===');
+            
+            let details = '';
+            let robustnessScore = 0;
+            const maxScore = 5;
+            
+            // Test 1: ¿El sistema maneja datos faltantes?
+            try {
+                const incompleteData = [
+                    { date: '2024-01-01', DC: null, EXT: 67 },
+                    { date: '2024-01-02', DC: 78, EXT: null }
+                ];
+                
+                const wrapped = { processedData: incompleteData };
+                const result = prepareDataForModels(wrapped, 'DC', 3);
+                robustnessScore++;
+                details += '✅ Maneja datos faltantes correctamente\n';
+            } catch (error) {
+                details += `❌ Problema con datos faltantes: ${error.message}\n`;
+            }
+            
+            // Test 2: ¿El sistema maneja funciones faltantes?
+            try {
+                if (typeof ensureModelFunctionsLoaded === 'function') {
+                    robustnessScore++;
+                    details += '✅ Sistema de recuperación de funciones disponible\n';
+                } else {
+                    details += '❌ Sistema de recuperación de funciones no encontrado\n';
+                }
+            } catch (error) {
+                details += `❌ Error verificando funciones: ${error.message}\n`;
+            }
+            
+            // Test 3: ¿El sistema tiene fallbacks?
+            try {
+                if (typeof createFallbackXGBoost === 'function' || 
+                    window.createFallbackXGBoost) {
+                    robustnessScore++;
+                    details += '✅ Funciones de respaldo disponibles\n';
+                } else {
+                    details += '❌ No se encontraron funciones de respaldo\n';
+                }
+            } catch (error) {
+                details += `❌ Error verificando respaldos: ${error.message}\n`;
+            }
+            
+            // Test 4: ¿El sistema valida parámetros?
+            try {
+                const result = prepareDataForModels(null, 'DC', 7);
+                details += '❌ No valida parámetros nulos\n';
+            } catch (error) {
+                robustnessScore++;
+                details += '✅ Valida parámetros correctamente\n';
+            }
+            
+            // Test 5: ¿El sistema maneja errores graciosamente?
+            try {
+                // Intentar procesar datos inválidos
+                const invalidData = { processedData: "no es un array" };
+                const result = prepareDataForModels(invalidData, 'DC', 7);
+                details += '❌ No maneja tipos de datos incorrectos\n';
+            } catch (error) {
+                robustnessScore++;
+                details += '✅ Maneja errores de tipos de datos\n';
+            }
+            
+            const status = robustnessScore >= 4 ? 'passed' : 
+                          robustnessScore >= 2 ? 'warning' : 'failed';
+            
+            addTestResult(
+                '🛡️ Test Robustez del Sistema',
+                status,
+                `Puntuación de robustez: ${robustnessScore}/${maxScore}`,
+                details
+            );
+        }
+
+        function showFinalSummary() {
+            const total = testResults.passed + testResults.failed + testResults.warnings;
+            const passRate = ((testResults.passed / total) * 100).toFixed(1);
+            
+            let status = 'passed';
+            let message = 'Sistema funcionando correctamente';
+            
+            if (testResults.failed > 0) {
+                status = 'failed';
+                message = 'Se encontraron problemas críticos';
+            } else if (testResults.warnings > 0) {
+                status = 'warning';
+                message = 'Sistema funcional con algunas advertencias';
+            }
+            
+            const details = `
+Pruebas pasadas: ${testResults.passed}
+Advertencias: ${testResults.warnings}  
+Pruebas fallidas: ${testResults.failed}
+Tasa de éxito: ${passRate}%
+            `;
+            
+            addTestResult(
+                '📊 Resumen Final de Tests',
+                status,
+                message,
+                details
+            );
+        }
+
+        // Auto-ejecutar tests al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Página cargada, ejecutando tests automáticamente...');
+            setTimeout(runAllTests, 1000); // Esperar un poco para que se carguen todos los scripts
+        });
+    </script>
+</body>
+</html>

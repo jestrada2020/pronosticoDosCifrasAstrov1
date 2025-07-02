@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Debug Test</title>
+</head>
+<body>
+    <h1>Debug Test - Actual Values</h1>
+    <div id="output"></div>
+    <button onclick="runTest()">Run Test</button>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        async function runTest() {
+            console.clear();
+            console.log('=== SIMPLE DEBUG TEST ===');
+            
+            try {
+                // Test 1: Direct CSV loading
+                console.log('1. Loading CSV files directly...');
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const text1 = await response1.text();
+                console.log('Raw CSV text (first 200 chars):', text1.substring(0, 200));
+                
+                // Test 2: Parse with Papa
+                console.log('2. Parsing with PapaParse...');
+                const parsed1 = Papa.parse(text1, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                });
+                
+                console.log('Parsed data:', parsed1.data);
+                console.log('DC values from parsed data:', parsed1.data.map(row => row.DC));
+                
+                // Test 3: Simulate what happens in prepareDataForModels
+                console.log('3. Simulating prepareDataForModels processing...');
+                const processedData = parsed1.data.map(row => {
+                    return {
+                        ...row,
+                        date: new Date(row.Fecha)
+                    };
+                });
+                
+                console.log('Processed data:', processedData);
+                console.log('DC values from processed data:', processedData.map(row => row.DC));
+                
+                // Test 4: Simulate split for test data
+                console.log('4. Simulating train/test split...');
+                const splitIndex = Math.floor(processedData.length * 0.85);
+                const testData = processedData.slice(splitIndex);
+                
+                console.log('Test data:', testData);
+                console.log('DC values from test data:', testData.map(row => row.DC));
+                
+                // Test 5: Simulate what XGBoost model does
+                console.log('5. Simulating XGBoost model result creation...');
+                const results = testData.map(item => {
+                    return {
+                        date: item.date,
+                        actual: item.DC,
+                        predicted: item.DC + (Math.random() - 0.5) * 10
+                    };
+                });
+                
+                console.log('Final results:', results);
+                console.log('Actual values in results:', results.map(r => r.actual));
+                
+                document.getElementById('output').innerHTML = 
+                    '<h3>Test Results:</h3>' +
+                    '<p>Check console for detailed output</p>' +
+                    '<p>Actual values: ' + results.map(r => r.actual).join(', ') + '</p>';
+                
+            } catch (error) {
+                console.error('Error in test:', error);
+                document.getElementById('output').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Corrección de Funciones Update</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        .warning { color: #ff9800; font-weight: bold; }
+        .test-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #005a87;
+        }
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Test - Corrección de Funciones Update</h1>
+        <p>Este test verifica que todas las funciones de actualización (updateXGBoostResults, etc.) estén disponibles y funcionen correctamente.</p>
+        
+        <button class="button" onclick="testUpdateFunctions()">🧪 Test Funciones Update</button>
+        <button class="button" onclick="testCompleteFlow()">🚀 Test Flujo Completo</button>
+        <button class="button" onclick="clearResults()">🧹 Limpiar</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    <script src="lstm.js"></script>
+    <script src="lstm-nn.js"></script>
+    <script src="lstm-lightgbm.js"></script>
+    <script src="lstm-xgboost.js"></script>
+    <script src="consensus.js"></script>
+    <script src="events.js"></script>
+
+    <script>
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function testUpdateFunctions() {
+            clearResults();
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h2>🔍 Test de Funciones de Actualización</h2>';
+            
+            const updateFunctions = [
+                'updateXGBoostResults',
+                'updateLightGBMResults', 
+                'updateNeuralNetResults',
+                'updateHybridResults',
+                'updateLSTMResults',
+                'updateLSTMNeuralNetworkResults',
+                'updateLSTMLightGBMResults',
+                'updateLSTMXGBoostResults',
+                'updateConsensusResults'
+            ];
+            
+            html += '<div class="test-box">';
+            html += '<h3>📋 Verificación de Disponibilidad</h3>';
+            html += '<table border="1" style="width: 100%; border-collapse: collapse;">';
+            html += '<tr><th>Función</th><th>En window</th><th>En global</th><th>Estado</th></tr>';
+            
+            let availableCount = 0;
+            
+            updateFunctions.forEach(funcName => {
+                const inWindow = typeof window[funcName] === 'function';
+                let inGlobal = false;
+                
+                try {
+                    inGlobal = typeof eval(funcName) === 'function';
+                } catch (e) {
+                    inGlobal = false;
+                }
+                
+                const isAvailable = inWindow || inGlobal;
+                if (isAvailable) availableCount++;
+                
+                const statusClass = isAvailable ? 'success' : 'error';
+                const statusText = isAvailable ? '✅ Disponible' : '❌ No encontrada';
+                
+                html += `<tr class="${statusClass}">`;
+                html += `<td>${funcName}</td>`;
+                html += `<td>${inWindow ? '✅' : '❌'}</td>`;
+                html += `<td>${inGlobal ? '✅' : '❌'}</td>`;
+                html += `<td>${statusText}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</table>';
+            html += `<p><strong>Resumen:</strong> ${availableCount}/${updateFunctions.length} funciones disponibles</p>`;
+            html += '</div>';
+            
+            // Test de la función safeCallUpdateFunction
+            html += '<div class="test-box">';
+            html += '<h3>🛡️ Test de safeCallUpdateFunction</h3>';
+            
+            if (typeof safeCallUpdateFunction === 'function') {
+                html += '<p class="success">✅ safeCallUpdateFunction está disponible</p>';
+                
+                // Crear datos de prueba
+                const testResults = [
+                    { date: '2024-01-01', actual: 45, predicted: 47 },
+                    { date: '2024-01-02', actual: 67, predicted: 65 }
+                ];
+                
+                // Test con función existente
+                try {
+                    safeCallUpdateFunction('updateXGBoostResults', testResults, {});
+                    html += '<p class="success">✅ Llamada segura a updateXGBoostResults exitosa</p>';
+                } catch (error) {
+                    html += `<p class="error">❌ Error en llamada segura: ${error.message}</p>`;
+                }
+                
+                // Test con función inexistente
+                try {
+                    safeCallUpdateFunction('funcionInexistente', testResults, {});
+                    html += '<p class="success">✅ Manejo de función inexistente exitoso</p>';
+                } catch (error) {
+                    html += `<p class="warning">⚠️ Error manejando función inexistente: ${error.message}</p>`;
+                }
+                
+            } else {
+                html += '<p class="error">❌ safeCallUpdateFunction no está disponible</p>';
+            }
+            
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testCompleteFlow() {
+            clearResults();
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h2>🚀 Test de Flujo Completo</h2>';
+            
+            try {
+                html += '<div class="test-box">';
+                html += '<h3>🔄 Simulando Ejecución de Modelos</h3>';
+                
+                // Crear datos de prueba
+                const testData = [];
+                for (let i = 1; i <= 10; i++) {
+                    const date = new Date(2024, 0, i);
+                    testData.push({
+                        date: date.toISOString().split('T')[0],
+                        DC: Math.floor(Math.random() * 40) + 40,
+                        EXT: Math.floor(Math.random() * 40) + 40,
+                        ULT2: Math.floor(Math.random() * 40) + 40,
+                        PM2: Math.floor(Math.random() * 40) + 40,
+                        C1C3: Math.floor(Math.random() * 40) + 40,
+                        C2C4: Math.floor(Math.random() * 40) + 40
+                    });
+                }
+                
+                const wrappedData = { processedData: testData };
+                const modelData = prepareDataForModels(wrappedData, 'DC', 5);
+                
+                html += `<p class="success">✅ Datos preparados: ${modelData.trainData.length} entrenamiento, ${modelData.testData.length} prueba</p>`;
+                
+                // Test XGBoost con función segura
+                if (typeof window.runXGBoostModel === 'function') {
+                    try {
+                        const xgbResult = await window.runXGBoostModel(
+                            modelData.trainData,
+                            modelData.testData,
+                            modelData.futureDates,
+                            'DC'
+                        );
+                        
+                        html += `<p class="success">✅ XGBoost ejecutado: ${xgbResult.validation?.length || 0} validaciones</p>`;
+                        
+                        // Test actualización con función segura
+                        if (typeof safeCallUpdateFunction === 'function') {
+                            safeCallUpdateFunction('updateXGBoostResults', xgbResult, modelData);
+                            html += '<p class="success">✅ Actualización XGBoost exitosa con función segura</p>';
+                        } else {
+                            html += '<p class="error">❌ safeCallUpdateFunction no disponible</p>';
+                        }
+                        
+                    } catch (error) {
+                        html += `<p class="error">❌ Error en XGBoost: ${error.message}</p>`;
+                    }
+                } else {
+                    html += '<p class="warning">⚠️ runXGBoostModel no disponible</p>';
+                }
+                
+                // Test LightGBM
+                if (typeof window.runLightGBMModel === 'function') {
+                    try {
+                        const lgbResult = await window.runLightGBMModel(
+                            modelData.trainData,
+                            modelData.testData,
+                            modelData.futureDates,
+                            'DC'
+                        );
+                        
+                        html += `<p class="success">✅ LightGBM ejecutado: ${lgbResult.length} resultados</p>`;
+                        
+                        safeCallUpdateFunction('updateLightGBMResults', lgbResult, modelData);
+                        html += '<p class="success">✅ Actualización LightGBM exitosa</p>';
+                        
+                    } catch (error) {
+                        html += `<p class="error">❌ Error en LightGBM: ${error.message}</p>`;
+                    }
+                } else {
+                    html += '<p class="warning">⚠️ runLightGBMModel no disponible</p>';
+                }
+                
+                html += '</div>';
+                
+                // Test de verificación de funciones
+                html += '<div class="test-box">';
+                html += '<h3>🔍 Verificación Post-Ejecución</h3>';
+                
+                if (typeof ensureModelFunctionsLoaded === 'function') {
+                    try {
+                        await ensureModelFunctionsLoaded();
+                        html += '<p class="success">✅ Verificación de funciones completada</p>';
+                    } catch (error) {
+                        html += `<p class="error">❌ Error en verificación: ${error.message}</p>`;
+                    }
+                } else {
+                    html += '<p class="error">❌ ensureModelFunctionsLoaded no disponible</p>';
+                }
+                
+                html += '</div>';
+                
+                // Logs de consola
+                html += '<div class="test-box">';
+                html += '<h3>📝 Información de Depuración</h3>';
+                html += '<pre id="debug-info">Preparando información de debug...</pre>';
+                html += '</div>';
+                
+                // Recopilar información de debug
+                setTimeout(() => {
+                    const debugInfo = document.getElementById('debug-info');
+                    if (debugInfo) {
+                        let debugText = '=== ESTADO DEL SISTEMA ===\n';
+                        debugText += `Timestamp: ${new Date().toLocaleString()}\n\n`;
+                        
+                        debugText += '=== FUNCIONES DISPONIBLES ===\n';
+                        const functions = [
+                            'runXGBoostModel', 'updateXGBoostResults',
+                            'runLightGBMModel', 'updateLightGBMResults',
+                            'safeCallUpdateFunction', 'ensureModelFunctionsLoaded'
+                        ];
+                        
+                        functions.forEach(func => {
+                            const available = typeof window[func] === 'function';
+                            debugText += `${func}: ${available ? '✅' : '❌'}\n`;
+                        });
+                        
+                        debugText += '\n=== DATOS DE PRUEBA ===\n';
+                        debugText += `Test data length: ${testData.length}\n`;
+                        debugText += `Model data train: ${modelData.trainData.length}\n`;
+                        debugText += `Model data test: ${modelData.testData.length}\n`;
+                        
+                        debugInfo.textContent = debugText;
+                    }
+                }, 500);
+                
+            } catch (error) {
+                html += `<div class="test-box"><p class="error">❌ Error crítico: ${error.message}</p></div>`;
+                console.error('Error en test completo:', error);
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Auto-ejecutar tests al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(testUpdateFunctions, 1000);
+        });
+    </script>
+</body>
+</html>

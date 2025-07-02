@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Valores Actuales - Validación Definitiva</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        .warning { color: #ff9800; font-weight: bold; }
+        .result-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #007cba;
+            color: white;
+        }
+        .button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #005a87;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Test de Valores Actuales - Validación Definitiva</h1>
+        <p>Este test verifica que los valores actuales mostrados corresponden exactamente a la variable objetivo seleccionada.</p>
+        
+        <button class="button" onclick="runDefinitiveTest()">🚀 Ejecutar Test Definitivo</button>
+        <button class="button" onclick="clearResults()">🧹 Limpiar</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <script src="lightgbm.js"></script>
+    <script src="neuralnet.js"></script>
+    <script src="hybrid.js"></script>
+    <script src="lstm.js"></script>
+    <script src="events.js"></script>
+
+    <script>
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function runDefinitiveTest() {
+            clearResults();
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h2>📊 Resultados del Test Definitivo</h2>';
+            
+            try {
+                // === PASO 1: CREAR DATOS DE PRUEBA CON VALORES CONOCIDOS ===
+                html += '<div class="result-box">';
+                html += '<h3>📋 Paso 1: Creando datos de prueba</h3>';
+                
+                const conocidosData = [
+                    { date: '2024-01-01', DC: 45, EXT: 67, ULT2: 23, PM2: 89, C1C3: 12, C2C4: 56 },
+                    { date: '2024-01-02', DC: 78, EXT: 34, ULT2: 90, PM2: 45, C1C3: 67, C2C4: 23 },
+                    { date: '2024-01-03', DC: 56, EXT: 89, ULT2: 12, PM2: 78, C1C3: 34, C2C4: 90 },
+                    { date: '2024-01-04', DC: 67, EXT: 45, ULT2: 78, PM2: 23, C1C3: 89, C2C4: 12 },
+                    { date: '2024-01-05', DC: 89, EXT: 56, ULT2: 34, PM2: 67, C1C3: 90, C2C4: 45 }
+                ];
+                
+                html += '<p class="success">✅ Datos creados con valores específicos conocidos</p>';
+                html += '<table><tr><th>Fecha</th><th>DC</th><th>EXT</th><th>ULT2</th><th>PM2</th><th>C1C3</th><th>C2C4</th></tr>';
+                conocidosData.forEach(item => {
+                    html += `<tr><td>${item.date}</td><td>${item.DC}</td><td>${item.EXT}</td><td>${item.ULT2}</td><td>${item.PM2}</td><td>${item.C1C3}</td><td>${item.C2C4}</td></tr>`;
+                });
+                html += '</table>';
+                html += '</div>';
+                
+                // === PASO 2: PROBAR CADA VARIABLE OBJETIVO ===
+                const variables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                
+                for (let targetVar of variables) {
+                    html += '<div class="result-box">';
+                    html += `<h3>🎯 Paso 2.${variables.indexOf(targetVar) + 1}: Probando variable objetivo "${targetVar}"</h3>`;
+                    
+                    try {
+                        // Preparar datos
+                        const wrappedData = { processedData: conocidosData };
+                        const modelData = prepareDataForModels(wrappedData, targetVar, 3);
+                        
+                        html += `<p class="success">✅ Datos preparados: ${modelData.trainData.length} entrenamiento, ${modelData.testData.length} prueba</p>`;
+                        
+                        // Ejecutar XGBoost
+                        if (typeof window.runXGBoostModel === 'function') {
+                            const xgbResult = await window.runXGBoostModel(
+                                modelData.trainData,
+                                modelData.testData,
+                                modelData.futureDates,
+                                targetVar
+                            );
+                            
+                            html += `<p class="success">✅ XGBoost ejecutado: ${xgbResult.validation?.length || 0} validaciones</p>`;
+                            
+                            // === VALIDACIÓN CRÍTICA DE VALORES ACTUALES ===
+                            html += '<h4>🔍 Validación de Valores Actuales:</h4>';
+                            html += '<table><tr><th>Índice</th><th>Fecha</th><th>Valor Esperado</th><th>Valor Obtenido</th><th>¿Correcto?</th><th>Predicción</th></tr>';
+                            
+                            let correctos = 0;
+                            let total = 0;
+                            
+                            if (xgbResult.validation) {
+                                xgbResult.validation.forEach((item, index) => {
+                                    const testDataIndex = index;
+                                    const originalItem = modelData.testData[testDataIndex];
+                                    const valorEsperado = originalItem ? originalItem[targetVar] : 'N/A';
+                                    const valorObtenido = item.actual;
+                                    const esCorrecto = valorEsperado === valorObtenido;
+                                    
+                                    if (esCorrecto) correctos++;
+                                    total++;
+                                    
+                                    const rowClass = esCorrecto ? 'success' : 'error';
+                                    html += `<tr class="${rowClass}">`;
+                                    html += `<td>${index}</td>`;
+                                    html += `<td>${item.date}</td>`;
+                                    html += `<td>${valorEsperado}</td>`;
+                                    html += `<td>${valorObtenido}</td>`;
+                                    html += `<td>${esCorrecto ? '✅' : '❌'}</td>`;
+                                    html += `<td>${item.predicted}</td>`;
+                                    html += '</tr>';
+                                });
+                            }
+                            
+                            html += '</table>';
+                            
+                            const porcentajeCorrectos = total > 0 ? ((correctos / total) * 100).toFixed(1) : 0;
+                            
+                            if (correctos === total && total > 0) {
+                                html += `<p class="success">🎉 PERFECTO: ${correctos}/${total} valores actuales correctos (${porcentajeCorrectos}%)</p>`;
+                            } else {
+                                html += `<p class="error">❌ PROBLEMA: Solo ${correctos}/${total} valores actuales correctos (${porcentajeCorrectos}%)</p>`;
+                            }
+                            
+                        } else {
+                            html += '<p class="error">❌ Función runXGBoostModel no disponible</p>';
+                        }
+                        
+                    } catch (error) {
+                        html += `<p class="error">❌ Error probando ${targetVar}: ${error.message}</p>`;
+                        console.error(`Error con ${targetVar}:`, error);
+                    }
+                    
+                    html += '</div>';
+                }
+                
+                // === PASO 3: PRUEBA DE INTEGRIDAD COMPLETA ===
+                html += '<div class="result-box">';
+                html += '<h3>🔬 Paso 3: Prueba de Integridad Completa</h3>';
+                
+                try {
+                    // Simular el flujo completo como en la aplicación principal
+                    console.log('=== SIMULANDO FLUJO COMPLETO ===');
+                    
+                    // Crear datos más realistas
+                    const datosCompletos = [];
+                    for (let i = 1; i <= 30; i++) {
+                        const date = new Date(2024, 0, i);
+                        datosCompletos.push({
+                            date: date.toISOString().split('T')[0],
+                            DC: Math.floor(Math.random() * 40) + 40, // 40-79
+                            EXT: Math.floor(Math.random() * 40) + 40,
+                            ULT2: Math.floor(Math.random() * 40) + 40,
+                            PM2: Math.floor(Math.random() * 40) + 40,
+                            C1C3: Math.floor(Math.random() * 40) + 40,
+                            C2C4: Math.floor(Math.random() * 40) + 40
+                        });
+                    }
+                    
+                    html += `<p class="success">✅ Generados ${datosCompletos.length} registros de datos sintéticos</p>`;
+                    
+                    // Probar con cada variable
+                    const resultadosFinales = {};
+                    
+                    for (let targetVar of variables) {
+                        try {
+                            const wrappedData = { processedData: datosCompletos };
+                            const modelData = prepareDataForModels(wrappedData, targetVar, 7);
+                            
+                            if (typeof window.runXGBoostModel === 'function') {
+                                const resultado = await window.runXGBoostModel(
+                                    modelData.trainData,
+                                    modelData.testData,
+                                    modelData.futureDates,
+                                    targetVar
+                                );
+                                
+                                // Verificar integridad
+                                let valoresCorrectos = 0;
+                                let totalValidaciones = 0;
+                                
+                                if (resultado.validation) {
+                                    resultado.validation.forEach((item, index) => {
+                                        const originalValue = modelData.testData[index] ? modelData.testData[index][targetVar] : null;
+                                        if (item.actual === originalValue) {
+                                            valoresCorrectos++;
+                                        }
+                                        totalValidaciones++;
+                                    });
+                                }
+                                
+                                const tasaExito = totalValidaciones > 0 ? ((valoresCorrectos / totalValidaciones) * 100).toFixed(1) : 0;
+                                
+                                resultadosFinales[targetVar] = {
+                                    correctos: valoresCorrectos,
+                                    total: totalValidaciones,
+                                    tasa: tasaExito,
+                                    status: tasaExito == 100 ? 'perfecto' : tasaExito >= 80 ? 'bueno' : 'problematico'
+                                };
+                                
+                            }
+                        } catch (error) {
+                            resultadosFinales[targetVar] = {
+                                error: error.message,
+                                status: 'error'
+                            };
+                        }
+                    }
+                    
+                    // Mostrar resumen final
+                    html += '<h4>📈 Resumen Final por Variable:</h4>';
+                    html += '<table><tr><th>Variable</th><th>Valores Correctos</th><th>Total</th><th>Tasa de Éxito</th><th>Estado</th></tr>';
+                    
+                    let variablesPerfectas = 0;
+                    let variablesProblematicas = 0;
+                    
+                    Object.entries(resultadosFinales).forEach(([variable, resultado]) => {
+                        let statusClass = 'warning';
+                        let statusText = 'Desconocido';
+                        
+                        if (resultado.error) {
+                            statusClass = 'error';
+                            statusText = 'Error';
+                            variablesProblematicas++;
+                        } else if (resultado.status === 'perfecto') {
+                            statusClass = 'success';
+                            statusText = '🎯 Perfecto';
+                            variablesPerfectas++;
+                        } else if (resultado.status === 'bueno') {
+                            statusClass = 'warning';
+                            statusText = '⚠️ Bueno';
+                        } else {
+                            statusClass = 'error';
+                            statusText = '❌ Problemático';
+                            variablesProblematicas++;
+                        }
+                        
+                        html += `<tr class="${statusClass}">`;
+                        html += `<td>${variable}</td>`;
+                        html += `<td>${resultado.correctos || 'N/A'}</td>`;
+                        html += `<td>${resultado.total || 'N/A'}</td>`;
+                        html += `<td>${resultado.tasa || 'N/A'}%</td>`;
+                        html += `<td>${statusText}</td>`;
+                        html += '</tr>';
+                    });
+                    
+                    html += '</table>';
+                    
+                    // Diagnóstico final
+                    if (variablesPerfectas === variables.length) {
+                        html += '<p class="success">🎉 EXCELENTE: Todas las variables funcionan perfectamente!</p>';
+                    } else if (variablesProblematicas === 0) {
+                        html += '<p class="warning">⚠️ BUENO: Todas las variables funcionan, algunas con tasas menores al 100%</p>';
+                    } else {
+                        html += `<p class="error">❌ PROBLEMAS DETECTADOS: ${variablesProblematicas} variables con problemas de ${variables.length} totales</p>`;
+                    }
+                    
+                } catch (error) {
+                    html += `<p class="error">❌ Error en prueba de integridad: ${error.message}</p>`;
+                    console.error('Error en integridad:', error);
+                }
+                
+                html += '</div>';
+                
+                // === RECOMENDACIONES ===
+                html += '<div class="result-box">';
+                html += '<h3>💡 Recomendaciones</h3>';
+                html += '<ul>';
+                html += '<li>Si ves valores 100% correctos: ✅ El sistema funciona perfectamente</li>';
+                html += '<li>Si ves valores parcialmente correctos: ⚠️ Revisa el procesamiento de datos</li>';
+                html += '<li>Si ves errores constantes: ❌ Revisa la función de modelos y su implementación</li>';
+                html += '<li>Si ves "N/A" frecuentemente: 🔍 Revisa la preparación de datos y filtros</li>';
+                html += '</ul>';
+                html += '</div>';
+                
+            } catch (error) {
+                html += `<div class="result-box"><p class="error">❌ Error crítico en test: ${error.message}</p></div>`;
+                console.error('Error crítico:', error);
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Auto-ejecutar al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(runDefinitiveTest, 1000);
+        });
+    </script>
+</body>
+</html>

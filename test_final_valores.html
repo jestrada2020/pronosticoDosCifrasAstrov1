@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Final - Valores Actuales</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; max-height: 300px; overflow-y: auto; }
+        .controls { margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Test Final - Valores Actuales</h1>
+    
+    <div class="controls">
+        <button onclick="runTestWithLogging()">Ejecutar Test XGBoost</button>
+        <button onclick="clearLogs()">Limpiar Logs</button>
+        <select id="targetVar">
+            <option value="DC">DC</option>
+            <option value="EXT">EXT</option>
+            <option value="ULT2">ULT2</option>
+            <option value="PM2">PM2</option>
+            <option value="C1C3">C1C3</option>
+            <option value="C2C4">C2C4</option>
+        </select>
+    </div>
+    
+    <div class="section">
+        <h2>Estado</h2>
+        <div id="status">Listo</div>
+    </div>
+    
+    <div class="section">
+        <h2>Resultados</h2>
+        <div id="results"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Logs</h2>
+        <pre id="logs"></pre>
+    </div>
+
+    <script>
+        let allLogs = [];
+        
+        // Capture console output
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function captureLog(level, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+            
+            allLogs.push(`[${timestamp}] ${level}: ${message}`);
+            
+            // Call original
+            if (level === 'LOG') originalLog(...args);
+            else if (level === 'WARN') originalWarn(...args);
+            else if (level === 'ERROR') originalError(...args);
+            
+            // Update display
+            updateLogsDisplay();
+        }
+        
+        function updateLogsDisplay() {
+            const logsElement = document.getElementById('logs');
+            logsElement.textContent = allLogs.slice(-50).join('\n');
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+        
+        function clearLogs() {
+            allLogs = [];
+            updateLogsDisplay();
+        }
+        
+        console.log = (...args) => captureLog('LOG', ...args);
+        console.warn = (...args) => captureLog('WARN', ...args);
+        console.error = (...args) => captureLog('ERROR', ...args);
+        
+        async function runTestWithLogging() {
+            const targetVariable = document.getElementById('targetVar').value;
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            
+            try {
+                statusEl.innerHTML = '<span class="warning">Ejecutando test...</span>';
+                resultsEl.innerHTML = '';
+                
+                console.log('=== INICIANDO TEST FINAL ===');
+                console.log('Variable objetivo:', targetVariable);
+                
+                // Load and parse CSV
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const csvText1 = await response1.text();
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                const csvText2 = await response2.text();
+                
+                const file1Data = parseCSV(csvText1);
+                const file2Data = parseCSV(csvText2);
+                
+                console.log('CSV data loaded and parsed');
+                
+                // Process data
+                const processedData = processData(file1Data, file2Data);
+                console.log('Data processed');
+                
+                // Prepare for models
+                const modelData = prepareDataForModels(processedData, targetVariable, 3);
+                console.log('Model data prepared');
+                
+                // Run XGBoost
+                const xgboostResults = await runXGBoostModel(
+                    modelData.trainData,
+                    modelData.testData,
+                    modelData.futureDates,
+                    targetVariable
+                );
+                
+                console.log('XGBoost completed');
+                console.log('XGBoost results:', xgboostResults);
+                
+                // Analyze results
+                const validationResults = xgboostResults.validation || [];
+                const futureResults = xgboostResults.future || [];
+                
+                const actualValues = validationResults.map(r => r.actual);
+                const validActuals = actualValues.filter(v => v !== null && v !== undefined && !isNaN(v));
+                const naCount = actualValues.length - validActuals.length;
+                
+                console.log('Analysis complete');
+                
+                // Display results
+                let html = `<h3>Resultados para ${targetVariable}</h3>`;
+                html += `<p><strong>Datos de entrenamiento:</strong> ${modelData.trainData.length}</p>`;
+                html += `<p><strong>Datos de prueba:</strong> ${modelData.testData.length}</p>`;
+                html += `<p><strong>Predicciones de validación:</strong> ${validationResults.length}</p>`;
+                html += `<p><strong>Predicciones futuras:</strong> ${futureResults.length}</p>`;
+                html += `<p><strong>Valores actuales válidos:</strong> ${validActuals.length}</p>`;
+                html += `<p><strong>Valores N/A:</strong> ${naCount}</p>`;
+                
+                if (naCount === 0) {
+                    html += `<p><span class="success">✅ ÉXITO: Todos los valores actuales son válidos</span></p>`;
+                } else {
+                    html += `<p><span class="error">❌ PROBLEMA: ${naCount} valores aparecen como N/A</span></p>`;
+                }
+                
+                // Show table
+                html += '<h4>Tabla de Resultados</h4>';
+                html += '<table><tr><th>Fecha</th><th>Valor Actual</th><th>Predicción</th><th>Estado</th></tr>';
+                
+                validationResults.forEach(result => {
+                    const isValidActual = result.actual !== null && result.actual !== undefined && !isNaN(result.actual);
+                    html += `<tr>`;
+                    html += `<td>${result.date ? result.date.toLocaleDateString() : 'N/A'}</td>`;
+                    html += `<td style="${isValidActual ? 'background-color: #e6f7ff;' : 'background-color: #ffe6e6;'}">${isValidActual ? result.actual.toFixed(2) : 'N/A'}</td>`;
+                    html += `<td>${result.predicted?.toFixed(2) || 'N/A'}</td>`;
+                    html += `<td>${isValidActual ? '✅' : '❌'}</td>`;
+                    html += `</tr>`;
+                });
+                
+                html += '</table>';
+                resultsEl.innerHTML = html;
+                statusEl.innerHTML = '<span class="success">Test completado</span>';
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                statusEl.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+                resultsEl.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        if (header === 'Fecha') {
+                            row[header] = values[index];
+                        } else {
+                            const numValue = parseFloat(values[index]);
+                            row[header] = isNaN(numValue) ? values[index] : numValue;
+                        }
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        window.addEventListener('load', () => {
+            console.log('Test page loaded');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+</head>
+<body>
+    <h1>Debug Test for Actual Values</h1>
+    <div id="output"></div>
+    
+    <script src="main.js"></script>
+    <script>
+        // Wait for page to load then test
+        window.addEventListener('load', async function() {
+            console.log('Starting debug test...');
+            
+            // Test 1: Load CSV files and check data
+            try {
+                console.log('=== TEST 1: Loading CSV files ===');
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const text1 = await response1.text();
+                console.log('ProHOY CSV first few lines:');
+                console.log(text1.split('\n').slice(0, 5).join('\n'));
+                
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                const text2 = await response2.text();
+                console.log('ProInvHOY CSV first few lines:');
+                console.log(text2.split('\n').slice(0, 5).join('\n'));
+            } catch (error) {
+                console.error('Error loading CSV files:', error);
+            }
+            
+            // Test 2: Test data loading and processing
+            try {
+                console.log('=== TEST 2: Loading and processing data ===');
+                await loadData();
+                console.log('Data loaded successfully');
+                
+                if (window.diagnosticDataCheck) {
+                    console.log('=== Running diagnostic data check ===');
+                    window.diagnosticDataCheck();
+                }
+                
+                // Test 3: Prepare data for models
+                console.log('=== TEST 3: Preparing data for models ===');
+                const preparedData = prepareDataForModels();
+                console.log('Prepared data sample:');
+                console.log('Training data length:', preparedData.trainData.length);
+                console.log('Testing data length:', preparedData.testData.length);
+                
+                if (preparedData.testData.length > 0) {
+                    console.log('First test data point:');
+                    console.log(preparedData.testData[0]);
+                    console.log('Test actual values (first 5):');
+                    console.log(preparedData.testActual.slice(0, 5));
+                }
+                
+            } catch (error) {
+                console.error('Error in data processing:', error);
+            }
+            
+            document.getElementById('output').innerHTML = 'Check console for debug information';
+        });
+    </script>
+</body>
+</html>

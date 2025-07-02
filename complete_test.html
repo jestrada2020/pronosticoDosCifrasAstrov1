@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Flow Test</title>
+    <style>
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Complete Flow Test</h1>
+    <button onclick="runCompleteTest()">Run Complete Test</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+    
+    <div id="logs"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('logs');
+            const p = document.createElement('div');
+            p.className = `log ${type}`;
+            p.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            logDiv.appendChild(p);
+            console.log(message);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            console.clear();
+        }
+        
+        async function runCompleteTest() {
+            clearLogs();
+            log("=== INICIANDO TEST COMPLETO ===", "info");
+            
+            try {
+                // Step 1: Load CSV files
+                log("1. Cargando archivos CSV...", "info");
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                
+                if (!response1.ok || !response2.ok) {
+                    throw new Error('Error loading CSV files');
+                }
+                
+                const text1 = await response1.text();
+                const text2 = await response2.text();
+                
+                log(`CSV 1 loaded: ${text1.length} characters`, "success");
+                log(`CSV 2 loaded: ${text2.length} characters`, "success");
+                
+                // Step 2: Parse CSV files
+                log("2. Parseando CSV files...", "info");
+                const parsed1 = Papa.parse(text1, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                });
+                
+                const parsed2 = Papa.parse(text2, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                });
+                
+                log(`Parsed 1: ${parsed1.data.length} rows`, "success");
+                log(`Parsed 2: ${parsed2.data.length} rows`, "success");
+                
+                // Log some sample values
+                if (parsed1.data.length > 0) {
+                    log(`Sample DC values from file 1: ${parsed1.data.slice(0, 5).map(r => r.DC).join(', ')}`, "info");
+                }
+                if (parsed2.data.length > 0) {
+                    log(`Sample DC values from file 2: ${parsed2.data.slice(0, 5).map(r => r.DC).join(', ')}`, "info");
+                }
+                
+                // Step 3: Process data using main.js functions
+                log("3. Procesando datos con función maestra...", "info");
+                const processedData = processDataMaster(parsed1.data, parsed2.data);
+                
+                log(`Processed data: ${processedData.processedData.length} entries`, "success");
+                
+                if (processedData.processedData.length > 0) {
+                    const sampleData = processedData.processedData.slice(0, 3);
+                    log(`Sample processed data:`, "info");
+                    sampleData.forEach((item, index) => {
+                        log(`  ${index}: DC=${item.DC}, EXT=${item.EXT}, date=${item.date}`, "info");
+                    });
+                }
+                
+                // Step 4: Prepare data for models
+                log("4. Preparando datos para modelos...", "info");
+                const modelData = prepareDataForModels(processedData, 'DC', 7);
+                
+                log(`Model data prepared:`, "success");
+                log(`  Train data: ${modelData.trainData.length} entries`, "info");
+                log(`  Test data: ${modelData.testData.length} entries`, "info");
+                log(`  Future dates: ${modelData.futureDates.length} dates`, "info");
+                
+                if (modelData.testData.length > 0) {
+                    log("Sample test data values:", "info");
+                    modelData.testData.forEach((item, index) => {
+                        log(`  Test[${index}]: DC=${item.DC}, date=${item.date ? item.date.toLocaleDateString() : 'N/A'}`, "info");
+                    });
+                }
+                
+                // Step 5: Run XGBoost model
+                log("5. Ejecutando modelo XGBoost...", "info");
+                const xgboostResults = await runXGBoostModel(modelData, 10, 4, 0.7);
+                
+                log(`XGBoost results: ${xgboostResults.length} predictions`, "success");
+                
+                if (xgboostResults.length > 0) {
+                    log("Sample XGBoost results:", "info");
+                    xgboostResults.slice(0, 5).forEach((result, index) => {
+                        log(`  Result[${index}]: actual=${result.actual}, predicted=${result.predicted}, date=${result.date ? result.date.toLocaleDateString() : 'N/A'}`, "info");
+                    });
+                    
+                    // Check for the actual values specifically
+                    const actualValues = xgboostResults.map(r => r.actual).filter(a => a !== null && a !== undefined);
+                    log(`Actual values found: ${actualValues.length}`, actualValues.length > 0 ? "success" : "error");
+                    if (actualValues.length > 0) {
+                        log(`Actual values: ${actualValues.slice(0, 10).join(', ')}`, "info");
+                        log(`Range: ${Math.min(...actualValues)} - ${Math.max(...actualValues)}`, "info");
+                    }
+                }
+                
+                log("=== TEST COMPLETADO EXITOSAMENTE ===", "success");
+                
+            } catch (error) {
+                log(`ERROR: ${error.message}`, "error");
+                console.error('Complete test error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

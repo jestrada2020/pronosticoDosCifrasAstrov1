@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Target Variable Debug</title>
+</head>
+<body>
+    <h1>Target Variable Debug Test</h1>
+    <button onclick="debugTargetVariable()">Debug Target Variable</button>
+    <div id="output"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        async function debugTargetVariable() {
+            console.clear();
+            console.log('=== DEBUG TARGET VARIABLE ===');
+            
+            try {
+                // Load and parse CSV
+                const response = await fetch('ProHOY-ASTROLUNA.csv');
+                const text = await response.text();
+                console.log('Raw CSV (first 200 chars):', text.substring(0, 200));
+                
+                const parsed = Papa.parse(text, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                });
+                
+                console.log('Parsed data:', parsed.data);
+                console.log('Headers:', parsed.meta.fields);
+                
+                // Test with different target variables
+                const targetVariables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                
+                targetVariables.forEach(targetVar => {
+                    console.log(`\\n--- Testing target variable: ${targetVar} ---`);
+                    
+                    const values = parsed.data.map(row => {
+                        const value = row[targetVar];
+                        console.log(`Row: ${JSON.stringify(row)}, ${targetVar}: ${value} (type: ${typeof value})`);
+                        return value;
+                    }).filter(v => v !== undefined && v !== null);
+                    
+                    console.log(`${targetVar} values:`, values);
+                    console.log(`${targetVar} range: ${Math.min(...values)} - ${Math.max(...values)}`);
+                });
+                
+                // Simulate the exact same process as in the models
+                console.log('\\n=== SIMULATING MODEL PROCESS ===');
+                
+                // Process data like processDataMaster would
+                const processedData = parsed.data.map(row => {
+                    return {
+                        ...row,
+                        date: new Date(row.Fecha),
+                        dateString: row.Fecha
+                    };
+                });
+                
+                console.log('Processed data sample:', processedData.slice(0, 2));
+                
+                // Simulate prepareDataForModels
+                const targetVariable = 'DC';
+                const features = processedData.filter(item => 
+                    item[targetVariable] !== undefined && 
+                    !isNaN(item[targetVariable]) && 
+                    item[targetVariable] !== null
+                );
+                
+                console.log('Filtered features:', features.length);
+                console.log('Sample features:', features.slice(0, 2));
+                
+                const splitIndex = Math.floor(features.length * 0.85);
+                const testData = features.slice(splitIndex);
+                
+                console.log('Test data:', testData);
+                console.log('Test data length:', testData.length);
+                
+                // Simulate XGBoost result creation
+                const validationPredictions = testData.map((item, index) => {
+                    const actualValue = item[targetVariable];
+                    console.log(`Test item ${index}:`, item);
+                    console.log(`  ${targetVariable}:`, actualValue, `(type: ${typeof actualValue})`);
+                    
+                    return {
+                        date: item.date,
+                        actual: actualValue,
+                        predicted: actualValue + Math.random() * 10
+                    };
+                });
+                
+                console.log('Validation predictions:', validationPredictions);
+                
+                document.getElementById('output').innerHTML = 
+                    '<h3>Debug Results:</h3>' +
+                    '<p>Check console for detailed output</p>' +
+                    '<p>Test data length: ' + testData.length + '</p>' +
+                    '<p>Sample actual values: ' + validationPredictions.map(v => v.actual).join(', ') + '</p>';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('output').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

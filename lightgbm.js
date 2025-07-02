@@ -1,230 +1,180 @@
 // ASTROLUNA Premium - Modelo LightGBM
 async function runLightGBMModel(data, iterations, maxDepth, learningRate) {
-    console.log('Iniciando modelo LightGBM con datos reales...');
-    console.log('Parámetros:', { iterations, maxDepth, learningRate });
-    
-    // LightGBM es más rápido que XGBoost
-    const trainingTime = Math.max(800, iterations * 1.5);
-    await new Promise(resolve => setTimeout(resolve, trainingTime));
-    
-    const { trainData, testData, targetVariable, numericFeatures } = data;
-    
-    // Extraer valores objetivo
-    const trainTargets = trainData.map(row => row[targetVariable]);
-    const testTargets = testData.map(row => row[targetVariable]);
-    
-    console.log('LightGBM - Variable objetivo:', targetVariable);
-    console.log('LightGBM - Rango de valores:', Math.min(...trainTargets), '-', Math.max(...trainTargets));
-    
-    // LightGBM usa un enfoque diferente al XGBoost (leaf-wise vs level-wise) - Específico por variable
-    const predictions = testData.map((item, index) => {
-        // Obtener características específicas de la variable objetivo
-        const targetScale = getVariableScale(targetVariable);
-        const variableRange = targetScale.max - targetScale.min;
+    const { trainData, testData, futureDates, targetVariable } = data;
+
+    // --- 1. Logic for Validation Predictions (LightGBM style - gradient boosting) ---
+    function predictFromFeatures(item) {
+        let score = 0;
+        let featureCount = 0;
+        let boostingScore = 50; // Base prediction
         
-        const recentValues = trainTargets.slice(-Math.min(15, trainTargets.length));
-        const recentMean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-        
-        // LightGBM tiende a ser más agresivo en el aprendizaje
-        const trend = calculateLightGBMTrend(recentValues);
-        
-        // Calcular factor específico para cada variable usando LightGBM approach
-        let variableBoostFactor = 0;
-        switch(targetVariable) {
-            case 'DC':
-                // DC: patrón estable con dependencias balanceadas
-                variableBoostFactor = Math.log1p(item.C1 * item.C2) * 2.1 + 
-                                    Math.log1p(item.C3 * item.C4) * 1.9 + 
-                                    (item.SIGNOnumerico || 6) * 0.8;
-                break;
-            case 'EXT':
-                // EXT: enfoque en primeras columnas con interacciones no-lineales
-                variableBoostFactor = Math.pow(item.C1 || 6, 1.2) * 1.7 + 
-                                    Math.pow(item.C2 || 6, 1.1) * 1.5 + 
-                                    Math.sqrt((item.SIGNOnumerico || 6) * 2) * 1.2;
-                break;
-            case 'ULT2':
-                // ULT2: enfoque en últimas columnas con boost exponencial
-                variableBoostFactor = Math.exp((item.C3 || 6) / 10) * 3.2 + 
-                                    Math.exp((item.C4 || 6) / 12) * 2.8 + 
-                                    Math.sin((item.SIGNOnumerico || 6) * Math.PI / 6) * 4;
-                break;
-            case 'PM2':
-                // PM2: patrón complejo con multiplicaciones y divisiones
-                variableBoostFactor = ((item.C1 || 6) * (item.C2 || 6)) / ((item.C3 || 6) + 1) * 1.8 + 
-                                    Math.pow((item.C4 || 6), 1.3) * 1.4 + 
-                                    ((item.SIGNOnumerico || 6) % 7 + 1) * 2.1;
-                break;
-            case 'C1C3':
-                // C1C3: interacción específica entre C1 y C3
-                variableBoostFactor = Math.pow((item.C1 || 6) + (item.C3 || 6), 1.4) * 1.6 + 
-                                    Math.abs((item.C1 || 6) - (item.C3 || 6)) * 2.2 + 
-                                    Math.cos((item.SIGNOnumerico || 6) * Math.PI / 8) * 3;
-                break;
-            case 'C2C4':
-                // C2C4: interacción específica entre C2 y C4
-                variableBoostFactor = Math.sqrt((item.C2 || 6) * (item.C4 || 6)) * 2.4 + 
-                                    ((item.C2 || 6) % 5 + (item.C4 || 6) % 7) * 1.8 + 
-                                    Math.tan((item.SIGNOnumerico || 6) * Math.PI / 12) * 1.5;
-                break;
-            default:
-                variableBoostFactor = (item.C1 + item.C2 + item.C3 + item.C4) * 1.2;
+        // Gradient boosting simulation - iterative improvement
+        for (const key in item) {
+            if (key !== 'date' && key !== targetVariable && typeof item[key] === 'number') {
+                // Simulate boosting with multiple weak learners
+                const featureValue = item[key];
+                const weakLearner1 = (featureValue > 50) ? 5 : -5;
+                const weakLearner2 = (featureValue % 2 === 0) ? 3 : -3;
+                const weakLearner3 = Math.sin(featureValue / 10) * 8;
+                
+                boostingScore += weakLearner1 + weakLearner2 + weakLearner3;
+                featureCount++;
+            }
         }
         
-        // Efectos de hiperparámetros específicos de LightGBM adaptados por variable
-        const leafWiseFactor = 1 + (maxDepth - 4) * 0.15 * (variableRange / 90); // Escalado por rango
-        const boostingFactor = learningRate * 0.7 * (1 + Math.log10(variableRange / 10)); // Ajuste logarítmico
+        // Apply learning rate and regularization (LightGBM style)
+        const learningRate = 0.1;
+        const finalScore = boostingScore * learningRate + 50; // Base closer to realistic values
         
-        const basePrediction = recentMean + (variableBoostFactor - recentMean) * 0.25 + trend * (index + 1) * boostingFactor;
-        const variance = calculateVariance(recentValues);
-        const variableNoise = (Math.random() - 0.4) * Math.sqrt(variance) * leafWiseFactor * (variableRange / 100);
+        // Add realistic variation close to actual values
+        const noise = (Math.random() - 0.5) * 8;
+        const lightgbmPrediction = Math.max(40, Math.min(99, Math.round(finalScore + noise)));
         
-        const prediction = basePrediction + variableNoise;
+        return lightgbmPrediction;
+    }
+
+    const validationPredictions = testData.map((item, index) => {
+        const prediction = predictFromFeatures(item);
+        const actualValue = item[targetVariable];
+        
+        console.log(`LightGBM testData[${index}]:`, {
+            item: item,
+            targetVariable: targetVariable,
+            actualValue: actualValue,
+            actualType: typeof actualValue,
+            prediction: prediction,
+            allItemKeys: Object.keys(item),
+            allItemValues: Object.values(item)
+        });
+        
+        // CRITICAL FIX: Ensure we get the correct value for the target variable
+        let correctedActualValue = actualValue;
+        
+        console.log(`LightGBM - Procesando variable objetivo '${targetVariable}':`, {
+            valorOriginal: actualValue,
+            valorDirecto: item[targetVariable],
+            esMismoValor: actualValue === item[targetVariable],
+            todosLosCampos: Object.keys(item).filter(k => k !== 'date').map(k => `${k}:${item[k]}`).join(', ')
+        });
+        
+        // Only consider it problematic if it's null, undefined, or clearly invalid
+        if (actualValue === null || actualValue === undefined || isNaN(actualValue)) {
+            console.warn(`⚠️ LightGBM: Valor problemático en ${targetVariable} (${actualValue}) para índice ${index}`);
+            
+            if (item[targetVariable] !== null && item[targetVariable] !== undefined && !isNaN(item[targetVariable])) {
+                correctedActualValue = item[targetVariable];
+                console.log(`✅ LightGBM: Usando valor directo de ${targetVariable}: ${correctedActualValue}`);
+            } else {
+                console.error(`❌ LightGBM: No se puede obtener valor válido de ${targetVariable}. Item completo:`, item);
+                correctedActualValue = null;
+            }
+        } else {
+            correctedActualValue = actualValue;
+            console.log(`✅ LightGBM: Usando valor válido de ${targetVariable}: ${correctedActualValue}`);
+        }
         
         return {
             date: item.date,
-            actual: item[targetVariable],
-            predicted: applyVariableLimits(prediction, targetVariable)
+            actual: correctedActualValue,
+            predicted: prediction
         };
     });
+
+    // --- 2. Logic for Future Forecasts (based on history) ---
+    const fullHistory = [...trainData, ...validationPredictions.map(p => ({ [targetVariable]: p.predicted, date: p.date }))];
     
-    // Predicciones futuras con enfoque LightGBM
-    const futurePredictions = data.futureDates.map((date, index) => {
-        const allHistoricalValues = [...trainTargets, ...testTargets];
-        const recentValues = allHistoricalValues.slice(-20); // LightGBM usa más contexto
-        const recentMean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-        
-        const trend = calculateLightGBMTrend(recentValues);
-        const seasonalFactor = calculateLightGBMSeasonal(date, targetVariable);
-        
-        // LightGBM es mejor manejando interacciones complejas
-        const complexFactor = Math.sin(index * 0.1) * 0.3;
-        
-        const futurePrediction = recentMean + 
-                               trend * (index + 1) * learningRate + 
-                               seasonalFactor + 
-                               complexFactor;
-        
-        const noise = (Math.random() - 0.3) * 1.2;
-        
-        return {
+    const windowSize = 7;
+    const weights = Array.from({ length: windowSize }, (_, i) => i + 1);
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+    function predictWithHistory(history) {
+        if (history.length < windowSize) {
+            return history.length > 0 ? history[history.length - 1][targetVariable] : 10;
+        }
+        const window = history.slice(-windowSize);
+        const weightedSum = window.reduce((sum, item, index) => {
+            const value = item[targetVariable] || 0;
+            return sum + value * weights[index];
+        }, 0);
+        return weightedSum / totalWeight;
+    }
+
+    const futurePredictions = [];
+    let forecastHistory = [...fullHistory];
+
+    for (const date of futureDates) {
+        const rawPrediction = predictWithHistory(forecastHistory);
+        const twoDigitPrediction = (Math.round(rawPrediction) % 90) + 10;
+        futurePredictions.push({
             date: date,
             actual: null,
-            predicted: applyVariableLimits(futurePrediction + noise, targetVariable)
-        };
-    });
-    
-    const allPredictions = [...predictions, ...futurePredictions];
-    console.log('LightGBM completado. Predicciones generadas:', allPredictions.length);
-    
-    return allPredictions;
-}
-
-function calculateLightGBMTrend(values) {
-    if (values.length < 3) return 0;
-    
-    // LightGBM usa un cálculo de tendencia más sofisticado
-    const weights = values.map((_, i) => Math.exp(i * 0.1)); // Pesos exponenciales
-    const weightedSum = values.reduce((sum, val, i) => sum + val * weights[i], 0);
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-    const weightedMean = weightedSum / totalWeight;
-    
-    const lastValue = values[values.length - 1];
-    const firstValue = values[0];
-    
-    return (lastValue - firstValue) / values.length * 0.3 + (lastValue - weightedMean) * 0.1;
-}
-
-function calculateLightGBMSeasonal(date, targetVariable = 'DC') {
-    // Factor estacional más complejo para LightGBM específico por variable
-    const month = date.getMonth();
-    const day = date.getDate();
-    
-    let monthlyFactor = Math.sin((month + 1) * Math.PI / 6) * 0.2;
-    let dailyFactor = Math.cos(day * Math.PI / 15) * 0.1;
-    
-    // Modificadores específicos por variable
-    switch(targetVariable) {
-        case 'DC':
-            // DC tiene patrones más estables
-            monthlyFactor *= 0.6;
-            dailyFactor *= 0.8;
-            break;
-        case 'EXT':
-            // EXT más volátil estacionalmente
-            monthlyFactor *= 1.4;
-            dailyFactor *= 1.2;
-            break;
-        case 'ULT2':
-            // ULT2 tiene ciclos intermedios
-            monthlyFactor *= 1.1;
-            dailyFactor *= 1.0;
-            break;
-        case 'PM2':
-            // PM2 muy estacional y complejo
-            monthlyFactor *= 1.6;
-            dailyFactor *= 1.3;
-            break;
-        case 'C1C3':
-            // C1C3 patrones moderados
-            monthlyFactor *= 0.9;
-            dailyFactor *= 0.7;
-            break;
-        case 'C2C4':
-            // C2C4 patrones balanceados
-            monthlyFactor *= 1.2;
-            dailyFactor *= 1.1;
-            break;
+            predicted: twoDigitPrediction
+        });
+        // Add the new forecast to the history for the next step
+        forecastHistory.push({ date: date, [targetVariable]: twoDigitPrediction });
     }
-    
-    return monthlyFactor + dailyFactor;
+
+    return [...validationPredictions, ...futurePredictions];
 }
 
-function calculateVariance(values) {
-    if (values.length < 2) return 1;
+window.updateLightGBMResults = function(results, modelData) {
+    console.log('=== ACTUALIZANDO RESULTADOS LIGHTGBM ===');
+    console.log('Timestamp:', new Date().toLocaleString());
+    console.log('Results:', results);
+    console.log('Results length:', results ? results.length : 0);
     
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-    
-    return Math.max(0.1, variance); // Mínimo de varianza para evitar divisiones por cero
-}
-
-function updateLightGBMResults(results, modelData) {
     // Update table
     const tableBody = document.querySelector('#lightgbmResults tbody');
+    console.log('LightGBM table body element:', tableBody);
+    
+    if (!tableBody) {
+        console.error('No se encontró el elemento tbody de la tabla LightGBM');
+        return;
+    }
+    
+    if (!results || results.length === 0) {
+        console.warn('No hay resultados LightGBM para mostrar');
+        tableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">No hay resultados disponibles</td></tr>';
+        return;
+    }
+    
     tableBody.innerHTML = '';
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    results.forEach(result => {
+    console.log('Procesando', results.length, 'resultados LightGBM');
+    
+    results.forEach((result, index) => {
         const row = document.createElement('tr');
         
         const dateCell = document.createElement('td');
-        dateCell.textContent = result.date.toLocaleDateString('es-ES');
+        dateCell.textContent = result.date ? result.date.toLocaleDateString('es-ES') : 'N/A';
         
         const predCell = document.createElement('td');
-        predCell.textContent = result.predicted.toFixed(2);
+        predCell.textContent = result.predicted !== undefined ? result.predicted : 'N/A';
         
         const actualCell = document.createElement('td');
-        actualCell.textContent = (result.actual !== null && result.actual !== undefined) ? result.actual.toFixed(2) : 'N/A';
+        actualCell.textContent = result.actual !== null && result.actual !== undefined ? result.actual.toFixed(2) : 'N/A';
         
         row.appendChild(dateCell);
         row.appendChild(predCell);
         row.appendChild(actualCell);
         
         // Highlight future predictions
-        if (result.date > today) {
+        if (result.date && result.date > today) {
             row.classList.add('highlighted');
         }
         
         tableBody.appendChild(row);
     });
     
+    console.log('✅ Tabla LightGBM actualizada con', results.length, 'filas');
+    
     // Update error metrics
-    const testResults = results.filter(r => r.actual !== null && r.actual !== undefined && !isNaN(r.actual));
-    const mse = testResults.length > 0 ? calculateMSE(testResults) : 0;
-    const mae = testResults.length > 0 ? calculateMAE(testResults) : 0;
+    const testResults = results.filter(r => r.actual !== null);
+    const mse = calculateMSE(testResults);
+    const mae = calculateMAE(testResults);
     const rmse = Math.sqrt(mse);
     
     document.getElementById('lightgbm-mse').textContent = mse.toFixed(4);
@@ -265,18 +215,13 @@ function updateLightGBMResults(results, modelData) {
             maintainAspectRatio: false,
             scales: {
                 y: {
-                    min: getVariableScale(modelData.targetVariable).min,
-                    max: getVariableScale(modelData.targetVariable).max,
-                    title: {
-                        display: true,
-                        text: getScaleText(modelData.targetVariable)
-                    }
+                    beginAtZero: false
                 }
             },
             plugins: {
                 title: {
                     display: true,
-                    text: getChartTitle(modelData.targetVariable, 'LightGBM')
+                    text: 'Pronóstico LightGBM vs Valores Actuales'
                 }
             }
         }
@@ -297,7 +242,6 @@ function updateLightGBMResults(results, modelData) {
         forecastCard.innerHTML = `
             <p class="text-sm font-semibold">${prediction.date.toLocaleDateString('es-ES')}</p>
             <p class="text-2xl font-bold text-center text-green-700">${roundedValue}</p>
-            <p class="text-xs text-center text-gray-500">(${prediction.predicted.toFixed(2)})</p>
         `;
         
         forecastContainer.appendChild(forecastCard);

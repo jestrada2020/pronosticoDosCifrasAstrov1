@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Debug N/A - Valores Actuales</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/plugin/customParseFormat.js"></script>
+    <script src="main.js"></script>
+    <script src="xgboost.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Test Debug N/A - Valores Actuales</h1>
+    
+    <div class="section">
+        <h2>Estado del Test</h2>
+        <div id="status">Iniciando...</div>
+    </div>
+    
+    <div class="section">
+        <h2>Análisis de Pipeline Completo</h2>
+        <div id="pipeline-analysis"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Tabla de Comparación: CSV vs Pipeline</h2>
+        <div id="comparison-table"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Logs del Proceso</h2>
+        <pre id="logs"></pre>
+    </div>
+
+    <script>
+        let allLogs = [];
+        
+        // Override console.log to capture logs
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function captureLog(level, ...args) {
+            const timestamp = new Date().toISOString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            allLogs.push(`[${timestamp}] ${level.toUpperCase()}: ${message}`);
+            
+            // Call original function
+            if (level === 'log') originalLog(...args);
+            else if (level === 'warn') originalWarn(...args);
+            else if (level === 'error') originalError(...args);
+            
+            // Update logs display
+            document.getElementById('logs').textContent = allLogs.join('\n');
+        }
+        
+        console.log = (...args) => captureLog('log', ...args);
+        console.warn = (...args) => captureLog('warn', ...args);
+        console.error = (...args) => captureLog('error', ...args);
+        
+        async function runFullPipelineTest() {
+            try {
+                document.getElementById('status').innerHTML = '<span class="warning">Ejecutando test...</span>';
+                
+                // Step 1: Load CSV files
+                console.log('=== STEP 1: LOADING CSV FILES ===');
+                const response1 = await fetch('ProHOY-ASTROLUNA.csv');
+                const csvText1 = await response1.text();
+                const response2 = await fetch('ProInvHOY-ASTROLUNA.csv');
+                const csvText2 = await response2.text();
+                
+                // Step 2: Parse CSV data
+                console.log('=== STEP 2: PARSING CSV DATA ===');
+                const file1Data = parseCSV(csvText1);
+                const file2Data = parseCSV(csvText2);
+                
+                console.log('CSV Data Parsed:', {
+                    file1Rows: file1Data.length,
+                    file2Rows: file2Data.length,
+                    file1Sample: file1Data.slice(0, 3),
+                    file2Sample: file2Data.slice(0, 3)
+                });
+                
+                // Step 3: Process data
+                console.log('=== STEP 3: PROCESSING DATA ===');
+                const processedData = processData(file1Data, file2Data);
+                
+                // Step 4: Test each target variable
+                const targetVariables = ['DC', 'EXT', 'ULT2', 'PM2', 'C1C3', 'C2C4'];
+                const results = {};
+                
+                for (const targetVar of targetVariables) {
+                    console.log(`=== STEP 4.${targetVar}: TESTING ${targetVar} ===`);
+                    
+                    try {
+                        // Prepare data for models
+                        const preparedData = prepareDataForModels(processedData, targetVar, 5);
+                        
+                        // Run XGBoost model
+                        const xgboostResult = await runXGBoostModel(
+                            preparedData.trainData,
+                            preparedData.testData,
+                            preparedData.futureDates,
+                            targetVar
+                        );
+                        
+                        results[targetVar] = {
+                            success: true,
+                            preparedData: preparedData,
+                            modelResult: xgboostResult,
+                            actualValues: preparedData.testData.map(item => ({
+                                date: item.date,
+                                csvValue: item[targetVar],
+                                type: typeof item[targetVar]
+                            })),
+                            predictions: xgboostResult.validation.map(pred => ({
+                                date: pred.date,
+                                actual: pred.actual,
+                                predicted: pred.predicted,
+                                actualType: typeof pred.actual,
+                                isNA: pred.actual === null || pred.actual === undefined || isNaN(pred.actual)
+                            }))
+                        };
+                        
+                    } catch (error) {
+                        console.error(`Error testing ${targetVar}:`, error);
+                        results[targetVar] = {
+                            success: false,
+                            error: error.message
+                        };
+                    }
+                }
+                
+                // Step 5: Analyze results
+                console.log('=== STEP 5: ANALYZING RESULTS ===');
+                displayPipelineAnalysis(results);
+                displayComparisonTable(results);
+                
+                document.getElementById('status').innerHTML = '<span class="success">Test completado</span>';
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                document.getElementById('status').innerHTML = `<span class="error">Test falló: ${error.message}</span>`;
+            }
+        }
+        
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        const value = values[index];
+                        // Try to parse as number if not date
+                        if (header === 'Fecha' || header === 'fecha' || header === 'Date') {
+                            row[header] = value;
+                        } else {
+                            const numValue = parseFloat(value);
+                            row[header] = isNaN(numValue) ? value : numValue;
+                        }
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        function displayPipelineAnalysis(results) {
+            let html = '<h3>Análisis por Variable</h3>';
+            
+            for (const [varName, result] of Object.entries(results)) {
+                html += `<div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd;">`;
+                html += `<h4>${varName}</h4>`;
+                
+                if (!result.success) {
+                    html += `<span class="error">Error: ${result.error}</span>`;
+                } else {
+                    const naCount = result.predictions.filter(p => p.isNA).length;
+                    const totalCount = result.predictions.length;
+                    
+                    html += `<p><strong>Test Data:</strong> ${result.preparedData.testData.length} registros</p>`;
+                    html += `<p><strong>Predicciones:</strong> ${totalCount} registros</p>`;
+                    html += `<p><strong>Valores N/A:</strong> ${naCount} (${((naCount/totalCount)*100).toFixed(1)}%)</p>`;
+                    
+                    if (naCount > 0) {
+                        html += `<span class="error">❌ PROBLEMA: ${naCount} valores aparecen como N/A</span>`;
+                    } else {
+                        html += `<span class="success">✅ OK: No hay valores N/A</span>`;
+                    }
+                    
+                    // Show sample of actual values from CSV vs predictions
+                    html += '<p><strong>Muestra CSV vs Predicciones:</strong></p>';
+                    const sample = result.predictions.slice(0, 5);
+                    sample.forEach((pred, i) => {
+                        const csvValue = result.actualValues[i]?.csvValue;
+                        html += `<div style="margin: 5px 0; font-family: monospace;">`;
+                        html += `Fecha: ${pred.date?.toLocaleDateString()} | `;
+                        html += `CSV: ${csvValue} | `;
+                        html += `Actual: ${pred.actual} | `;
+                        html += `Match: ${csvValue === pred.actual ? '✅' : '❌'}`;
+                        html += `</div>`;
+                    });
+                }
+                
+                html += '</div>';
+            }
+            
+            document.getElementById('pipeline-analysis').innerHTML = html;
+        }
+        
+        function displayComparisonTable(results) {
+            let html = '<table><tr><th>Variable</th><th>CSV Valores</th><th>Pipeline Valores</th><th>Coincidencias</th><th>Estado</th></tr>';
+            
+            for (const [varName, result] of Object.entries(results)) {
+                if (result.success) {
+                    const csvValues = result.actualValues.map(a => a.csvValue);
+                    const pipelineValues = result.predictions.map(p => p.actual);
+                    const matches = csvValues.filter((csv, i) => csv === pipelineValues[i]).length;
+                    const total = csvValues.length;
+                    const percentage = total > 0 ? ((matches/total)*100).toFixed(1) : '0';
+                    
+                    html += `<tr>`;
+                    html += `<td>${varName}</td>`;
+                    html += `<td>${csvValues.slice(0, 5).join(', ')}...</td>`;
+                    html += `<td>${pipelineValues.slice(0, 5).join(', ')}...</td>`;
+                    html += `<td>${matches}/${total} (${percentage}%)</td>`;
+                    html += `<td>${percentage === '100.0' ? '<span class="success">✅ OK</span>' : '<span class="error">❌ PROBLEMA</span>'}</td>`;
+                    html += `</tr>`;
+                } else {
+                    html += `<tr><td>${varName}</td><td colspan="4"><span class="error">Error: ${result.error}</span></td></tr>`;
+                }
+            }
+            
+            html += '</table>';
+            document.getElementById('comparison-table').innerHTML = html;
+        }
+        
+        // Start the test
+        window.addEventListener('load', () => {
+            setTimeout(runFullPipelineTest, 100);
+        });
+    </script>
+</body>
+</html>
